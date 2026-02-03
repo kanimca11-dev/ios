@@ -3,7 +3,7 @@ import WebKit
 
 struct WebView: UIViewRepresentable {
     let url: URL
-    @Binding var navigationState: NavigationState
+    @ObservedObject var navigationState: NavigationState
     let userAgentSuffix: String?
     
     func makeCoordinator() -> Coordinator {
