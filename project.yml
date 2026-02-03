@@ -1,0 +1,26 @@
+name: AppifyWebiOS
+options:
+  bundleIdPrefix: com.example.appifyweb
+targets:
+  AppifyWebiOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources: [AppifyWebiOS]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.appifyweb
+        INFOPLIST_FILE: AppifyWebiOS/Info.plist
+        DEVELOPMENT_TEAM: "" # Set via CI if needed
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "" # Disable checking for local
+    info:
+      path: AppifyWebiOS/Info.plist
+      properties:
+        CFBundleShortVersionString: 1.0
+        CFBundleVersion: 1
+        UILaunchScreen:
+          UIColorName: "LaunchBackgroundColor"
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIUserInterfaceStyle: Light
