@@ -145,7 +145,7 @@ struct ContentView: View {
                     // Haptic feedback (mirrors Android)
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     // Actually navigate (fixes original iOS "print" stub)
-                    nav.navigateTo = tab.url
+                    nav.navigateTo = tab.path
                 } label: {
                     VStack(spacing: 4) {
                         Image(systemName: sfSymbol(for: tab.icon))

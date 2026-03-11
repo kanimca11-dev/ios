@@ -51,14 +51,11 @@ class ApiService: ObservableObject {
 
                 do {
                     let decoder = JSONDecoder()
-                    decoder.keyDecodingStrategy = .convertFromSnakeCase
-                    let result = try decoder.decode(AppConfigResponse.self, from: data)
-                    self?.appConfig = result.data
+                    let config = try decoder.decode(AppConfig.self, from: data)
+                    self?.appConfig = config
                     self?.persistConfig(data)
                     // Persist brand colors for instant display on next cold start
-                    if let cfg = self?.appConfig {
-                        self?.persistColors(primary: cfg.primaryColor, secondary: cfg.secondaryColor)
-                    }
+                    self?.persistColors(primary: config.primaryColor, secondary: config.secondaryColor)
                 } catch {
                     self?.loadFromCacheOrFail("Config decode error: \(error.localizedDescription)")
                 }
@@ -89,8 +86,7 @@ class ApiService: ObservableObject {
         else { return nil }
 
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try? decoder.decode(AppConfigResponse.self, from: data).data
+        return try? decoder.decode(AppConfig.self, from: data)
     }
 
     // MARK: - Brand color persistence (instant colors before API returns)
@@ -108,7 +104,3 @@ class ApiService: ObservableObject {
     }
 }
 
-struct AppConfigResponse: Codable {
-    let success: Bool
-    let data: AppConfig
-}

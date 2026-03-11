@@ -28,20 +28,10 @@ struct AppFeatures: Codable, Equatable {
 }
 
 struct NavigationTab: Codable, Identifiable, Equatable {
-    var id: String { label + url }
+    var id: String { label + path }
     var label: String
     var icon: String
-    var url: String
-    
-    var path: String {
-        if url.hasPrefix("http") {
-             if let uri = URL(string: url) {
-                 return uri.path
-             }
-             return "/"
-        }
-        return url
-    }
+    var path: String
 }
 
 // Helper for Hex Colors
