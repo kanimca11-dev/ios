@@ -131,9 +131,8 @@ struct ContentView: View {
                 bottomNavBar(config: config)
             }
         }
-        // Extend under status bar at top; bottom safe area respected so nav bar
-        // sits above home indicator (its background extends below via ignoresSafeArea)
-        .ignoresSafeArea(edges: .top)
+        // Do NOT extend under status bar — keeps status bar area fixed during
+        // pull-to-refresh and removes the CSS safe-area-inset gap at the top
     }
 
     // MARK: - Bottom Navigation Bar (actually navigates — fixes original bug)
@@ -149,24 +148,24 @@ struct ContentView: View {
                     // Actually navigate (fixes original iOS "print" stub)
                     nav.navigateTo = tab.path
                 } label: {
-                    VStack(spacing: 4) {
+                    VStack(spacing: 2) {
                         Image(systemName: sfSymbol(for: tab.icon))
-                            .font(.system(size: 20))
+                            .font(.system(size: 22))
                             .symbolVariant(isActive ? .fill : .none)
                         Text(tab.label)
-                            .font(.caption2)
+                            .font(.system(size: 10))
                     }
                     .frame(maxWidth: .infinity)
                     .foregroundColor(isActive ? primaryColor : Color(UIColor.systemGray))
                 }
             }
         }
-        .padding(.top, 12)
-        .padding(.bottom, 10)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
         .background(
             Color(UIColor.systemBackground)
-                .ignoresSafeArea(edges: .bottom)  // extends background under home indicator
-                .shadow(color: .black.opacity(0.12), radius: 4, y: -2)
+                .ignoresSafeArea(edges: .bottom)
+                .shadow(color: .black.opacity(0.1), radius: 3, y: -1)
         )
     }
 
