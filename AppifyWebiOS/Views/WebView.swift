@@ -35,6 +35,8 @@ struct WebView: UIViewRepresentable {
         wv.navigationDelegate = context.coordinator
         wv.uiDelegate         = context.coordinator
         wv.allowsBackForwardNavigationGestures = true
+        // Disable auto inset so website fills edge-to-edge (website CSS handles safe areas)
+        wv.scrollView.contentInsetAdjustmentBehavior = .never
 
         // Custom user agent
         if let suffix = userAgentSuffix {

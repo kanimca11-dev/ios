@@ -117,7 +117,8 @@ struct ContentView: View {
     // MARK: - App Shell (WebView + optional bottom nav)
 
     private func appShell(config: AppConfig) -> some View {
-        VStack(spacing: 0) {
+        let showNav = config.features.showBottomNav && !shouldHideNav(config: config)
+        return VStack(spacing: 0) {
             WebView(
                 url: URL(string: config.targetUrl)!,
                 navigationState: nav,
@@ -126,12 +127,13 @@ struct ContentView: View {
                     withAnimation(.easeOut(duration: 0.6)) { showSplash = false }
                 }
             )
-
-            if config.features.showBottomNav && !shouldHideNav(config: config) {
+            if showNav {
                 bottomNavBar(config: config)
             }
         }
-        .ignoresSafeArea(edges: config.features.showBottomNav ? .top : .all)
+        // Extend under status bar at top; bottom safe area respected so nav bar
+        // sits above home indicator (its background extends below via ignoresSafeArea)
+        .ignoresSafeArea(edges: .top)
     }
 
     // MARK: - Bottom Navigation Bar (actually navigates — fixes original bug)
@@ -159,10 +161,11 @@ struct ContentView: View {
                 }
             }
         }
-        .padding(.vertical, 10)
-        .padding(.bottom, 4)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
         .background(
             Color(UIColor.systemBackground)
+                .ignoresSafeArea(edges: .bottom)  // extends background under home indicator
                 .shadow(color: .black.opacity(0.12), radius: 4, y: -2)
         )
     }
@@ -233,19 +236,58 @@ struct ContentView: View {
     }
 
     private func sfSymbol(for icon: String) -> String {
-        switch icon {
-        case "home":          return "house"
-        case "shopping_cart": return "cart"
-        case "person":        return "person"
-        case "settings":      return "gear"
-        case "favorite":      return "heart"
-        case "list":          return "list.bullet"
-        case "mail":          return "envelope"
-        case "notifications": return "bell"
-        case "search":        return "magnifyingglass"
-        case "category":      return "square.grid.2x2"
-        case "dashboard":     return "chart.bar"
-        default:              return "star"
+        switch icon.lowercased() {
+        // Home / navigation
+        case "home", "house":                          return "house"
+        case "menu", "hamburger":                      return "line.3.horizontal"
+        case "back":                                   return "chevron.left"
+        // Shopping
+        case "shopping_cart", "cart", "bag":           return "cart"
+        case "store", "shop", "storefront":            return "storefront"
+        case "orders", "order":                        return "bag"
+        // People
+        case "person", "account", "profile", "user":  return "person"
+        case "persons", "people", "customers", "users","person_2","group": return "person.2"
+        // Settings / tools
+        case "settings", "setting", "gear":            return "gear"
+        case "tune", "filter", "sliders":              return "slider.horizontal.3"
+        // Content
+        case "favorite", "favorites", "heart", "like": return "heart"
+        case "star", "starred":                        return "star"
+        case "bookmark", "bookmarks":                  return "bookmark"
+        case "list", "list_alt":                       return "list.bullet"
+        case "grid", "grid_view", "category":          return "square.grid.2x2"
+        // Communication
+        case "mail", "email", "message":               return "envelope"
+        case "chat", "forum":                          return "bubble.left"
+        case "notifications", "notification", "bell":  return "bell"
+        case "phone", "call":                          return "phone"
+        // Analytics / data
+        case "dashboard", "analytics", "insights":     return "chart.bar"
+        case "chart", "bar_chart":                     return "chart.bar.xaxis"
+        case "trending_up", "trend":                   return "chart.line.uptrend.xyaxis"
+        // Planning / calendar
+        case "plan", "planning", "calendar", "event", "schedule": return "calendar"
+        case "task", "tasks", "checklist":             return "checklist"
+        case "clipboard":                              return "clipboard"
+        // Location
+        case "location", "map", "place", "pin":        return "map"
+        // Media
+        case "image", "photo", "gallery":              return "photo"
+        case "camera":                                 return "camera"
+        case "video":                                  return "video"
+        // Misc
+        case "search", "find":                         return "magnifyingglass"
+        case "info", "information":                    return "info.circle"
+        case "help", "question":                       return "questionmark.circle"
+        case "add", "plus":                            return "plus"
+        case "edit", "pencil":                         return "pencil"
+        case "delete", "trash":                        return "trash"
+        case "share":                                  return "square.and.arrow.up"
+        case "download":                               return "arrow.down.circle"
+        case "upload":                                 return "arrow.up.circle"
+        case "refresh", "sync":                        return "arrow.clockwise"
+        default:                                       return "circle"
         }
     }
 
