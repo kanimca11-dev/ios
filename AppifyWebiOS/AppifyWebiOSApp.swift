@@ -250,6 +250,8 @@ struct ContentView: View {
     }
 
     private func applyOrientation(_ orientation: String) {
+        // requestGeometryUpdate requires iOS 16+; on iOS 15 portrait is the default
+        guard #available(iOS 16.0, *) else { return }
         let mask: UIInterfaceOrientationMask
         switch orientation {
         case "landscape": mask = .landscape

@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-struct AppConfig: Codable {
+struct AppConfig: Codable, Equatable {
     var targetUrl: String
     var primaryColor: String = "#0F9B9B"
     var secondaryColor: String = "#FFFFFF"
@@ -17,7 +17,7 @@ struct AppConfig: Codable {
     var uiSecondaryColor: Color { Color(hex: secondaryColor) }
 }
 
-struct AppFeatures: Codable {
+struct AppFeatures: Codable, Equatable {
     var enablePushNotifications: Bool = false
     var enableBiometrics: Bool = false
     var enableLocation: Bool = false
@@ -27,7 +27,7 @@ struct AppFeatures: Codable {
     var hiddenNavPaths: [String] = []
 }
 
-struct NavigationTab: Codable, Identifiable {
+struct NavigationTab: Codable, Identifiable, Equatable {
     var id: String { label + url }
     var label: String
     var icon: String

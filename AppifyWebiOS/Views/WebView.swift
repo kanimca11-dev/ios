@@ -122,6 +122,9 @@ struct WebView: UIViewRepresentable {
         }
 
         // ── File upload (UIDocumentPicker via WKUIDelegate) ────────────────────
+        // WKOpenPanelParameters arrived in iOS 18.4; on earlier versions the
+        // OS shows its own native file picker for <input type="file"> automatically.
+        @available(iOS 18.4, *)
         func webView(_ wv: WKWebView,
                      runOpenPanelWith params: WKOpenPanelParameters,
                      initiatedByFrame _: WKFrameInfo,
