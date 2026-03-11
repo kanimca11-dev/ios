@@ -30,17 +30,16 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Update Config with App Token
+      - name: Inject App Token and API URL into project.yml
         run: |
           APP_TOKEN="${{ github.event.client_payload.app_token || github.event.inputs.app_token }}"
           API_URL="${{ github.event.client_payload.api_url || github.event.inputs.api_url || 'https://www.appifyweb24.com/backend/index.php/' }}"
-          
-          # Update ApiService.swift
-          # Path relative to repo root
-          sed -i '' "s|YOUR_APP_TOKEN|${APP_TOKEN}|g" AppifyWebiOS/Networking/ApiService.swift
-          sed -i '' "s|https://your-api-domain.com/api/v1|${API_URL}v1|g" AppifyWebiOS/Networking/ApiService.swift
-          
-          echo "✅ Config updated with Token and API URL"
+
+          # Inject into Info.plist keys inside project.yml (read by ApiService at runtime)
+          sed -i '' "s|APP_TOKEN: \"default_token\"|APP_TOKEN: \"${APP_TOKEN}\"|g" project.yml
+          sed -i '' "s|API_BASE_URL: \"https://www.appifyweb24.com/backend/index.php\"|API_BASE_URL: \"${API_URL}\"|g" project.yml
+
+          echo "✅ project.yml updated — APP_TOKEN and API_BASE_URL injected"
 
       - name: Generate Xcode Project
         run: |

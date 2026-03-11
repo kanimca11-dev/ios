@@ -8,24 +8,21 @@ struct AppConfig: Codable {
     var splashLogoUrl: String?
     var userAgentSuffix: String?
     var subscriptionExpiredMessage: String = "This app's subscription has expired. Please contact the administrator."
+    var isActive: Bool = true
     var isSubscriptionActive: Bool = true
     var features: AppFeatures = AppFeatures()
-    
+
     // Computed Colors
-    var uiPrimaryColor: Color {
-        return Color(hex: primaryColor)
-    }
-    
-    var uiSecondaryColor: Color {
-        return Color(hex: secondaryColor)
-    }
+    var uiPrimaryColor: Color   { Color(hex: primaryColor)   }
+    var uiSecondaryColor: Color { Color(hex: secondaryColor) }
 }
 
 struct AppFeatures: Codable {
-    var enablePushNotifications: Bool = true
+    var enablePushNotifications: Bool = false
     var enableBiometrics: Bool = false
     var enableLocation: Bool = false
     var showBottomNav: Bool = false
+    var screenOrientation: String = "portrait"  // portrait | landscape | auto
     var navigationTabs: [NavigationTab] = []
     var hiddenNavPaths: [String] = []
 }
@@ -62,7 +59,7 @@ extension Color {
         case 8: // ARGB (32-bit)
             (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
         default:
-            (a, r, g, b) = (1, 1, 1, 0)
+            (a, r, g, b) = (255, 15, 155, 155)
         }
 
         self.init(

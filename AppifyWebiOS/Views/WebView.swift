@@ -1,76 +1,180 @@
 import SwiftUI
 import WebKit
+import UniformTypeIdentifiers
+
+// MARK: - Navigation State
+
+class NavigationState: ObservableObject {
+    @Published var currentUrl: String  = ""
+    @Published var isLoading:  Bool    = false
+    @Published var canGoBack:  Bool    = false
+    @Published var pageLoaded: Bool    = false  // fires once after first real page load
+    /// Set from outside (bottom-nav taps) to trigger programmatic navigation
+    @Published var navigateTo: String? = nil
+}
+
+// MARK: - WebView
 
 struct WebView: UIViewRepresentable {
     let url: URL
     @ObservedObject var navigationState: NavigationState
     let userAgentSuffix: String?
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
+    var onFirstPageLoaded: (() -> Void)? = nil
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
     func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        // Add message handlers for JS bridge if needed
-        
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.navigationDelegate = context.coordinator
-        
+        // ── Configuration ──────────────────────────────────────────────────────
+        let cfg = WKWebViewConfiguration()
+        cfg.allowsInlineMediaPlayback = true
+        cfg.mediaTypesRequiringUserActionForPlayback = []
+        // JS bridge: window.webkit.messageHandlers.AppifyWeb.postMessage("…")
+        cfg.userContentController.add(context.coordinator, name: "AppifyWeb")
+
+        let wv = WKWebView(frame: .zero, configuration: cfg)
+        wv.navigationDelegate = context.coordinator
+        wv.uiDelegate         = context.coordinator
+        wv.allowsBackForwardNavigationGestures = true
+
+        // Custom user agent
         if let suffix = userAgentSuffix {
-            webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 " + suffix
+            let base = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) " +
+                       "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
+            wv.customUserAgent = "\(base) \(suffix)"
         }
-        
-        // Pull to refresh support
-        let refreshControl = UIRefreshControl()
-        refreshControl.addTarget(context.coordinator, action: #selector(Coordinator.reload), for: .valueChanged)
-        webView.scrollView.refreshControl = refreshControl
-        
-        return webView
+
+        // ── Pull-to-refresh ────────────────────────────────────────────────────
+        let refreshCtl = UIRefreshControl()
+        refreshCtl.addTarget(context.coordinator,
+                             action: #selector(Coordinator.handleRefresh(_:)),
+                             for: .valueChanged)
+        wv.scrollView.refreshControl = refreshCtl
+
+        context.coordinator.webView = wv
+        wv.load(URLRequest(url: url))
+        return wv
     }
-    
-    func updateUIView(_ uiView: WKWebView, context: Context) {
-        // Load URL if changed or initial load
-        if uiView.url == nil {
-            let request = URLRequest(url: url)
-            uiView.load(request)
+
+    func updateUIView(_ wv: WKWebView, context: Context) {
+        // Programmatic navigation (bottom-nav taps or deep links)
+        if let dest = navigationState.navigateTo, !dest.isEmpty {
+            let fullUrl: URL?
+            if dest.hasPrefix("http") {
+                fullUrl = URL(string: dest)
+            } else if let base = wv.url {
+                fullUrl = URL(string: (base.scheme ?? "https") + "://" + (base.host ?? "") + dest)
+            } else {
+                fullUrl = nil
+            }
+            if let u = fullUrl { wv.load(URLRequest(url: u)) }
+            DispatchQueue.main.async { self.navigationState.navigateTo = nil }
         }
     }
-    
-    class Coordinator: NSObject, WKNavigationDelegate {
+
+    // MARK: Coordinator
+
+    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         var parent: WebView
-        
-        init(_ parent: WebView) {
-            self.parent = parent
+        weak var webView: WKWebView?
+
+        init(_ parent: WebView) { self.parent = parent }
+
+        // ── Pull-to-refresh ────────────────────────────────────────────────────
+        @objc func handleRefresh(_ sender: UIRefreshControl) {
+            webView?.reload()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { sender.endRefreshing() }
         }
-        
-        @objc func reload(_ sender: UIRefreshControl) {
-            sender.endRefreshing()
-            // Reload logic handled by WebKit automatically? No, we need to trigger it.
-            // But usually sender is attached to scrollview.
-            // We can acccess webview via parent... wait, UIViewRepresentable doesn't store reference easily.
-            // In a real app, you'd pass a command or use a dependency injection to trigger reload.
-            // For simplicity, we assume standard web behavior.
-        }
-        
-        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+
+        // ── Navigation callbacks ───────────────────────────────────────────────
+        func webView(_ wv: WKWebView, didStartProvisionalNavigation _: WKNavigation!) {
             parent.navigationState.isLoading = true
         }
-        
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            parent.navigationState.isLoading = false
-            parent.navigationState.currentUrl = webView.url?.absoluteString ?? ""
-            parent.navigationState.canGoBack = webView.canGoBack
+
+        func webView(_ wv: WKWebView, didFinish _: WKNavigation!) {
+            parent.navigationState.isLoading  = false
+            parent.navigationState.canGoBack  = wv.canGoBack
+            parent.navigationState.currentUrl = wv.url?.absoluteString ?? ""
+            wv.scrollView.refreshControl?.endRefreshing()
+
+            // Signal first real page load → hides splash overlay
+            if !parent.navigationState.pageLoaded,
+               let urlStr = wv.url?.absoluteString, urlStr != "about:blank" {
+                parent.navigationState.pageLoaded = true
+                parent.onFirstPageLoaded?()
+            }
+
+            // Mirror Android UserUtils: cache localStorage JSON
+            wv.evaluateJavaScript("JSON.stringify(localStorage)") { result, _ in
+                if let json = result as? String {
+                    UserDefaults.standard.set(json, forKey: "webview_local_storage")
+                }
+            }
         }
-        
-        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+
+        func webView(_ wv: WKWebView, didFail _: WKNavigation!, withError _: Error) {
             parent.navigationState.isLoading = false
+            wv.scrollView.refreshControl?.endRefreshing()
+        }
+
+        func webView(_ wv: WKWebView, didFailProvisionalNavigation _: WKNavigation!, withError _: Error) {
+            parent.navigationState.isLoading = false
+            wv.scrollView.refreshControl?.endRefreshing()
+        }
+
+        // ── File upload (UIDocumentPicker via WKUIDelegate) ────────────────────
+        func webView(_ wv: WKWebView,
+                     runOpenPanelWith params: WKOpenPanelParameters,
+                     initiatedByFrame _: WKFrameInfo,
+                     completionHandler: @escaping ([URL]?) -> Void) {
+
+            let types: [UTType] = [.image, .movie, .pdf, .data]
+            let picker = UIDocumentPickerViewController(forOpeningContentTypes: types)
+            picker.allowsMultipleSelection = params.allowsMultipleSelection
+
+            // Wrap in a host controller so we get the result
+            let host = FilePickerHost(onPick: completionHandler)
+            picker.delegate = host
+
+            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let root  = scene.windows.first?.rootViewController {
+                root.present(picker, animated: true)
+                // Retain host for the life of the picker
+                objc_setAssociatedObject(picker, &AssocKey.host, host, .OBJC_ASSOCIATION_RETAIN)
+            } else {
+                completionHandler(nil)
+            }
+        }
+
+        // ── JS Bridge ──────────────────────────────────────────────────────────
+        func userContentController(_ uc: WKUserContentController,
+                                   didReceive msg: WKScriptMessage) {
+            guard msg.name == "AppifyWeb",
+                  let body = msg.body as? String else { return }
+            NotificationCenter.default.post(name: .webViewJSMessage,
+                                            object: nil,
+                                            userInfo: ["message": body])
         }
     }
 }
 
-class NavigationState: ObservableObject {
-    @Published var currentUrl: String = ""
-    @Published var isLoading: Bool = false
-    @Published var canGoBack: Bool = false
+// MARK: - File picker delegate helper
+
+private class FilePickerHost: NSObject, UIDocumentPickerDelegate {
+    let onPick: ([URL]?) -> Void
+    init(onPick: @escaping ([URL]?) -> Void) { self.onPick = onPick }
+
+    func documentPicker(_ c: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        onPick(urls)
+    }
+    func documentPickerWasCancelled(_ c: UIDocumentPickerViewController) {
+        onPick(nil)
+    }
+}
+
+private enum AssocKey { static var host = "filePickerHost" }
+
+// MARK: - Notification names
+
+extension Notification.Name {
+    static let webViewJSMessage = Notification.Name("webViewJSMessage")
 }

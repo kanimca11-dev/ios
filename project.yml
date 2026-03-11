@@ -1,26 +1,70 @@
 name: AppifyWebiOS
+
 options:
   bundleIdPrefix: com.example.appifyweb
+  deploymentTarget:
+    iOS: "15.0"
+
 targets:
   AppifyWebiOS:
     type: application
     platform: iOS
     deploymentTarget: "15.0"
     sources: [AppifyWebiOS]
+
+    # System frameworks required by new features
+    dependencies:
+      - sdk: LocalAuthentication.framework   # BiometricLockView
+      - sdk: Network.framework               # NetworkMonitor
+      - sdk: WebKit.framework                # WKWebView
+      - sdk: UserNotifications.framework     # PushNotificationService
+      - sdk: UniformTypeIdentifiers.framework # File upload (UTType)
+
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.appifyweb
         INFOPLIST_FILE: AppifyWebiOS/Info.plist
-        DEVELOPMENT_TEAM: "" # Set via CI if needed
+        DEVELOPMENT_TEAM: ""          # Set via CI / Xcode signing
         CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "" # Disable checking for local
+        CODE_SIGN_IDENTITY: ""
+        SWIFT_VERSION: "5.9"
+
     info:
       path: AppifyWebiOS/Info.plist
       properties:
-        CFBundleShortVersionString: 1.0
-        CFBundleVersion: 1
-        UILaunchScreen:
-          UIColorName: "LaunchBackgroundColor"
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+
+        # ── Build-injected values (override in CI via -xcconfig or xcodebuild args) ──
+        API_BASE_URL: "https://www.appifyweb24.com/backend/index.php"
+        APP_TOKEN: "default_token"
+
+        # ── Permissions ───────────────────────────────────────────────────────
+        NSFaceIDUsageDescription: "This app uses Face ID to protect your account."
+        NSCameraUsageDescription: "This app needs camera access to upload photos."
+        NSPhotoLibraryUsageDescription: "This app needs photo library access to upload images."
+        NSLocationWhenInUseUsageDescription: "This app may use your location to improve your experience."
+
+        # ── Orientation (runtime-adjustable via requestGeometryUpdate) ────────
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+
+        # ── Push notifications (Background Modes) ────────────────────────────
+        UIBackgroundModes:
+          - remote-notification
+          - fetch
+
+        # ── Launch screen ─────────────────────────────────────────────────────
+        UILaunchScreen:
+          UIColorName: "LaunchBackgroundColor"
+
         UIUserInterfaceStyle: Light
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true   # Dev only — restrict in production
