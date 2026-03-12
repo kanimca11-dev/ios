@@ -140,32 +140,39 @@ struct ContentView: View {
     private func bottomNavBar(config: AppConfig) -> some View {
         HStack(spacing: 0) {
             ForEach(config.features.navigationTabs) { tab in
-                let isActive = nav.currentUrl.contains(tab.path) && !tab.path.isEmpty
+                let isActive = !tab.path.isEmpty && nav.currentUrl.contains(tab.path)
 
                 Button {
-                    // Haptic feedback (mirrors Android)
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    // Actually navigate (fixes original iOS "print" stub)
-                    nav.navigateTo = tab.path
+                    // Resolve relative paths against the base URL
+                    let dest: String
+                    if tab.path.hasPrefix("http") {
+                        dest = tab.path
+                    } else {
+                        let base = config.targetUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                        let path = tab.path.hasPrefix("/") ? tab.path : "/\(tab.path)"
+                        dest = base + path
+                    }
+                    nav.navigateTo = dest
                 } label: {
-                    VStack(spacing: 1) {
+                    VStack(spacing: 3) {
                         Image(systemName: sfSymbol(for: tab.icon))
-                            .font(.system(size: 20))
+                            .font(.system(size: 18, weight: isActive ? .semibold : .regular))
                             .symbolVariant(isActive ? .fill : .none)
                         Text(tab.label)
-                            .font(.system(size: 9, weight: .regular))
+                            .font(.system(size: 10, weight: .medium))
                     }
                     .frame(maxWidth: .infinity)
+                    .frame(height: 46)
                     .foregroundColor(isActive ? primaryColor : Color(UIColor.systemGray))
                 }
             }
         }
-        .padding(.top, 5)
-        .padding(.bottom, 6)
+        .frame(height: 55)
         .background(
             Color(UIColor.systemBackground)
                 .ignoresSafeArea(edges: .bottom)
-                .shadow(color: .black.opacity(0.1), radius: 3, y: -1)
+                .shadow(color: .black.opacity(0.08), radius: 4, y: -2)
         )
     }
 
@@ -286,7 +293,16 @@ struct ContentView: View {
         case "download":                               return "arrow.down.circle"
         case "upload":                                 return "arrow.up.circle"
         case "refresh", "sync":                        return "arrow.clockwise"
-        default:                                       return "circle"
+        case "work", "business", "briefcase":          return "briefcase"
+        case "money", "attach_money", "payment", "wallet": return "dollarsign.circle"
+        case "inventory", "warehouse":                 return "shippingbox"
+        case "report", "reports":                      return "doc.text"
+        case "support", "headset":                     return "headphones"
+        case "loyalty", "rewards":                     return "gift"
+        case "tracking":                               return "location.circle"
+        default:
+            // If the icon string itself is an SF symbol name, try using it directly
+            return icon.isEmpty ? "circle" : icon
         }
     }
 
