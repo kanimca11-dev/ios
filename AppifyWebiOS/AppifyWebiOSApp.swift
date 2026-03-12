@@ -160,15 +160,12 @@ struct ContentView: View {
                             .font(.system(size: 10, weight: .medium))
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .foregroundColor(isActive ? primaryColor : Color(UIColor.systemGray))
+                    .padding(.vertical, 5)
+                    .foregroundColor(isActive ? .white : .white.opacity(0.65))
                 }
             }
         }
-        .background(
-            Color(UIColor.systemBackground)
-                .shadow(color: .black.opacity(0.1), radius: 4, y: -2)
-        )
+        .background(primaryColor)
     }
 
     // MARK: - Splash Overlay
