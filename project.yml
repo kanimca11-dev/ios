@@ -66,5 +66,8 @@ targets:
           UIColorName: "LaunchBackgroundColor"
 
         UIUserInterfaceStyle: Light
+        # Force white status bar text (suits dark secondary-color nav bars)
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        UIViewControllerBasedStatusBarAppearance: false
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true   # Dev only — restrict in production

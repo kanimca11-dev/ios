@@ -131,6 +131,9 @@ struct ContentView: View {
                 bottomNavBar(config: config)
             }
         }
+        // Extends secondaryColor into the status bar area at the top
+        // while web content still starts below the status bar
+        .background(secondaryColor.ignoresSafeArea(edges: .top))
     }
 
     // MARK: - Bottom Navigation Bar (actually navigates — fixes original bug)
