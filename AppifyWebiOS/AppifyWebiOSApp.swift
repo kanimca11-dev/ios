@@ -131,15 +131,20 @@ struct ContentView: View {
                 bottomNavBar(config: config)
             }
         }
-        // Extends secondaryColor into the status bar area at the top
-        // while web content still starts below the status bar
+        // VStack ignores bottom safe area so bottomNavBar physically extends
+        // into the home indicator region (padding inside the nav bar accounts for it)
+        .ignoresSafeArea(edges: .bottom)
         .background(secondaryColor.ignoresSafeArea(edges: .top))
     }
 
     // MARK: - Bottom Navigation Bar (actually navigates — fixes original bug)
 
     private func bottomNavBar(config: AppConfig) -> some View {
-        HStack(spacing: 0) {
+        // Read the actual home indicator height at runtime
+        let homeInset: CGFloat = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?
+            .windows.first?.safeAreaInsets.bottom ?? 0
+
+        return HStack(spacing: 0) {
             ForEach(config.features.navigationTabs) { tab in
                 let isActive = !tab.path.isEmpty && nav.currentUrl.contains(tab.path)
 
@@ -163,15 +168,15 @@ struct ContentView: View {
                             .font(.system(size: 10, weight: .medium))
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 5)
                     .foregroundColor(isActive ? .white : .white.opacity(0.65))
                 }
             }
         }
-        .background(
-            secondaryColor
-                .ignoresSafeArea(edges: .bottom)
-        )
+        // 8pt above icons, 8pt below icons + home indicator height = icons sit
+        // just above the home indicator bar, matching standard iOS tab bar layout
+        .padding(.top, 8)
+        .padding(.bottom, 8 + homeInset)
+        .background(secondaryColor)
         .overlay(alignment: .top) {
             Rectangle()
                 .frame(height: 0.5)
