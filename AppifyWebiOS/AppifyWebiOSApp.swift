@@ -118,21 +118,19 @@ struct ContentView: View {
 
     private func appShell(config: AppConfig) -> some View {
         let showNav = config.features.showBottomNav && !shouldHideNav(config: config)
-        return VStack(spacing: 0) {
-            WebView(
-                url: URL(string: config.targetUrl)!,
-                navigationState: nav,
-                userAgentSuffix: config.userAgentSuffix,
-                onFirstPageLoaded: {
-                    withAnimation(.easeOut(duration: 0.6)) { showSplash = false }
-                }
-            )
+        return WebView(
+            url: URL(string: config.targetUrl)!,
+            navigationState: nav,
+            userAgentSuffix: config.userAgentSuffix,
+            onFirstPageLoaded: {
+                withAnimation(.easeOut(duration: 0.6)) { showSplash = false }
+            }
+        )
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if showNav {
                 bottomNavBar(config: config)
             }
         }
-        // Do NOT extend under status bar — keeps status bar area fixed during
-        // pull-to-refresh and removes the CSS safe-area-inset gap at the top
     }
 
     // MARK: - Bottom Navigation Bar (actually navigates — fixes original bug)
@@ -144,7 +142,6 @@ struct ContentView: View {
 
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    // Resolve relative paths against the base URL
                     let dest: String
                     if tab.path.hasPrefix("http") {
                         dest = tab.path
@@ -155,24 +152,22 @@ struct ContentView: View {
                     }
                     nav.navigateTo = dest
                 } label: {
-                    VStack(spacing: 3) {
+                    VStack(spacing: 2) {
                         Image(systemName: sfSymbol(for: tab.icon))
-                            .font(.system(size: 18, weight: isActive ? .semibold : .regular))
+                            .font(.system(size: 20, weight: isActive ? .semibold : .regular))
                             .symbolVariant(isActive ? .fill : .none)
                         Text(tab.label)
                             .font(.system(size: 10, weight: .medium))
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(height: 46)
+                    .padding(.vertical, 8)
                     .foregroundColor(isActive ? primaryColor : Color(UIColor.systemGray))
                 }
             }
         }
-        .frame(height: 55)
         .background(
             Color(UIColor.systemBackground)
-                .ignoresSafeArea(edges: .bottom)
-                .shadow(color: .black.opacity(0.08), radius: 4, y: -2)
+                .shadow(color: .black.opacity(0.1), radius: 4, y: -2)
         )
     }
 
@@ -300,9 +295,7 @@ struct ContentView: View {
         case "support", "headset":                     return "headphones"
         case "loyalty", "rewards":                     return "gift"
         case "tracking":                               return "location.circle"
-        default:
-            // If the icon string itself is an SF symbol name, try using it directly
-            return icon.isEmpty ? "circle" : icon
+        default:                                       return "circle"
         }
     }
 
