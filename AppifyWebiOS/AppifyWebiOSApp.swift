@@ -148,20 +148,20 @@ struct ContentView: View {
                     // Actually navigate (fixes original iOS "print" stub)
                     nav.navigateTo = tab.path
                 } label: {
-                    VStack(spacing: 2) {
+                    VStack(spacing: 1) {
                         Image(systemName: sfSymbol(for: tab.icon))
-                            .font(.system(size: 22))
+                            .font(.system(size: 20))
                             .symbolVariant(isActive ? .fill : .none)
                         Text(tab.label)
-                            .font(.system(size: 10))
+                            .font(.system(size: 9, weight: .regular))
                     }
                     .frame(maxWidth: .infinity)
                     .foregroundColor(isActive ? primaryColor : Color(UIColor.systemGray))
                 }
             }
         }
-        .padding(.top, 8)
-        .padding(.bottom, 8)
+        .padding(.top, 5)
+        .padding(.bottom, 6)
         .background(
             Color(UIColor.systemBackground)
                 .ignoresSafeArea(edges: .bottom)
