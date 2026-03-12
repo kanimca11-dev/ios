@@ -118,15 +118,15 @@ struct ContentView: View {
 
     private func appShell(config: AppConfig) -> some View {
         let showNav = config.features.showBottomNav && !shouldHideNav(config: config)
-        return WebView(
-            url: URL(string: config.targetUrl)!,
-            navigationState: nav,
-            userAgentSuffix: config.userAgentSuffix,
-            onFirstPageLoaded: {
-                withAnimation(.easeOut(duration: 0.6)) { showSplash = false }
-            }
-        )
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        return VStack(spacing: 0) {
+            WebView(
+                url: URL(string: config.targetUrl)!,
+                navigationState: nav,
+                userAgentSuffix: config.userAgentSuffix,
+                onFirstPageLoaded: {
+                    withAnimation(.easeOut(duration: 0.6)) { showSplash = false }
+                }
+            )
             if showNav {
                 bottomNavBar(config: config)
             }
