@@ -165,7 +165,15 @@ struct ContentView: View {
                 }
             }
         }
-        .background(primaryColor)
+        .background(
+            secondaryColor
+                .ignoresSafeArea(edges: .bottom)
+        )
+        .overlay(alignment: .top) {
+            Rectangle()
+                .frame(height: 0.5)
+                .foregroundColor(.white.opacity(0.15))
+        }
     }
 
     // MARK: - Splash Overlay
