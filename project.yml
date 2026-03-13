@@ -34,6 +34,8 @@ targets:
       properties:
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
+        # Display name shown under the app icon — replaced by CI at build time
+        CFBundleDisplayName: "APPIFYWEB_DISPLAY_NAME"
 
         # ── Build-injected values (override in CI via -xcconfig or xcodebuild args) ──
         API_BASE_URL: "https://www.appifyweb24.com/backend/index.php"
