@@ -73,26 +73,25 @@ jobs:
             pip3 install --quiet --break-system-packages Pillow 2>/dev/null || true
 
           python3 - << 'PYEOF'
-import sys, os
-try:
-    from PIL import Image
-except ImportError:
-    print("⚠️ Pillow not available — skipping icon generation")
-    sys.exit(0)
-
-logo = Image.open("/tmp/app_logo_raw").convert("RGBA")
-icon_dir = "AppifyWebiOS/Assets.xcassets/AppIcon.appiconset"
-sizes = [
-    ("icon-40.png",  40), ("icon-58.png",  58), ("icon-60.png",   60),
-    ("icon-80.png",  80), ("icon-87.png",  87), ("icon-120.png", 120),
-    ("icon-180.png", 180), ("icon-1024.png", 1024),
-]
-for name, size in sizes:
-    img = logo.resize((size, size), Image.LANCZOS)
-    img.save(os.path.join(icon_dir, name))
-    print(f"  ✅ {name} ({size}x{size})")
-print("✅ App icon set from logo")
-PYEOF
+          import sys, os
+          try:
+              from PIL import Image
+          except ImportError:
+              print("Pillow not available - skipping icon generation")
+              sys.exit(0)
+          logo = Image.open("/tmp/app_logo_raw").convert("RGBA")
+          icon_dir = "AppifyWebiOS/Assets.xcassets/AppIcon.appiconset"
+          sizes = [
+              ("icon-40.png", 40), ("icon-58.png", 58), ("icon-60.png", 60),
+              ("icon-80.png", 80), ("icon-87.png", 87), ("icon-120.png", 120),
+              ("icon-180.png", 180), ("icon-1024.png", 1024),
+          ]
+          for name, size in sizes:
+              img = logo.resize((size, size), Image.LANCZOS)
+              img.save(os.path.join(icon_dir, name))
+              print("  done: " + name)
+          print("App icon set from logo")
+          PYEOF
 
       - name: Generate Xcode Project
         run: |
