@@ -73,20 +73,12 @@ jobs:
             if [ -n "$LOGO_FILE" ]; then
               echo "Generating iOS icon sizes from logo..."
 
-              # iOS required sizes (pixel dimensions)
-              declare -A SIZES=(
-                ["icon-40.png"]=40
-                ["icon-58.png"]=58
-                ["icon-60.png"]=60
-                ["icon-80.png"]=80
-                ["icon-87.png"]=87
-                ["icon-120.png"]=120
-                ["icon-180.png"]=180
-                ["icon-1024.png"]=1024
-              )
+              # iOS required sizes — "filename:pixels" pairs (bash 3.2 compatible)
+              ICON_SIZES="icon-40.png:40 icon-58.png:58 icon-60.png:60 icon-80.png:80 icon-87.png:87 icon-120.png:120 icon-180.png:180 icon-1024.png:1024"
 
-              for FILENAME in "${!SIZES[@]}"; do
-                SIZE="${SIZES[$FILENAME]}"
+              for ENTRY in $ICON_SIZES; do
+                FILENAME="${ENTRY%%:*}"
+                SIZE="${ENTRY##*:}"
                 sips -z "$SIZE" "$SIZE" "$LOGO_FILE" --out "${ICON_DIR}/${FILENAME}" > /dev/null 2>&1
                 echo "  ✅ ${FILENAME} (${SIZE}x${SIZE})"
               done
