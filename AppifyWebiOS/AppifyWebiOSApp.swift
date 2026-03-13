@@ -160,14 +160,17 @@ struct ContentView: View {
                     }
                     nav.navigateTo = dest
                 } label: {
-                    VStack(spacing: 2) {
+                    VStack(spacing: 3) {
                         Image(systemName: sfSymbol(for: tab.icon))
                             .font(.system(size: 20, weight: isActive ? .semibold : .regular))
                             .symbolVariant(isActive ? .fill : .none)
+                            .frame(width: 24, height: 24)
                         Text(tab.label)
                             .font(.system(size: 10, weight: .medium))
+                            .lineLimit(1)
                     }
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
+                    .contentShape(Rectangle())
                     .foregroundColor(isActive ? .white : .white.opacity(0.65))
                 }
             }
