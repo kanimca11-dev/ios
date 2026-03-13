@@ -55,42 +55,44 @@ jobs:
           LOGO_URL="${{ github.event.client_payload.logo_url || github.event.inputs.logo_url }}"
           ICON_DIR="AppifyWebiOS/Assets.xcassets/AppIcon.appiconset"
 
-          if [ -n "$LOGO_URL" ]; then
-            echo "Downloading logo from: ${LOGO_URL}"
-
-            # Try PNG first, then JPG
-            if curl -L -f -o /tmp/app_logo.png "${LOGO_URL}" 2>/dev/null; then
-              LOGO_FILE="/tmp/app_logo.png"
-            elif curl -L -f -o /tmp/app_logo.jpg "${LOGO_URL}" 2>/dev/null; then
-              # Convert JPG to PNG so sips outputs PNG consistently
-              sips -s format png /tmp/app_logo.jpg --out /tmp/app_logo.png
-              LOGO_FILE="/tmp/app_logo.png"
-            else
-              echo "⚠️ Failed to download logo — using default icon"
-              LOGO_FILE=""
-            fi
-
-            if [ -n "$LOGO_FILE" ]; then
-              echo "Generating iOS icon sizes from logo..."
-
-              # iOS required sizes — "filename:pixels" pairs (bash 3.2 compatible)
-              ICON_SIZES="icon-40.png:40 icon-58.png:58 icon-60.png:60 icon-80.png:80 icon-87.png:87 icon-120.png:120 icon-180.png:180 icon-1024.png:1024"
-              ORIGINAL_LOGO="$LOGO_FILE"
-
-              for ENTRY in $ICON_SIZES; do
-                FILENAME="${ENTRY%%:*}"
-                SIZE="${ENTRY##*:}"
-                # Copy original each time — sips may resize the source file in-place
-                cp "$ORIGINAL_LOGO" /tmp/sips_input.png
-                sips -z "$SIZE" "$SIZE" /tmp/sips_input.png --out "${ICON_DIR}/${FILENAME}" > /dev/null 2>&1
-                echo "  ✅ ${FILENAME} (${SIZE}x${SIZE})"
-              done
-
-              echo "✅ App icon set from logo"
-            fi
-          else
+          if [ -z "$LOGO_URL" ]; then
             echo "⚠️ No logo URL provided — app will use default icon"
+            exit 0
           fi
+
+          echo "Downloading logo from: ${LOGO_URL}"
+          if ! curl -L -f -o /tmp/app_logo_raw "${LOGO_URL}" 2>/dev/null; then
+            echo "⚠️ Failed to download logo — using default icon"
+            exit 0
+          fi
+
+          echo "Generating iOS icon sizes from logo..."
+
+          # Use Python + Pillow (reliable cross-version image resize)
+          pip3 install --quiet Pillow 2>/dev/null || \
+            pip3 install --quiet --break-system-packages Pillow 2>/dev/null || true
+
+          python3 - << 'PYEOF'
+import sys, os
+try:
+    from PIL import Image
+except ImportError:
+    print("⚠️ Pillow not available — skipping icon generation")
+    sys.exit(0)
+
+logo = Image.open("/tmp/app_logo_raw").convert("RGBA")
+icon_dir = "AppifyWebiOS/Assets.xcassets/AppIcon.appiconset"
+sizes = [
+    ("icon-40.png",  40), ("icon-58.png",  58), ("icon-60.png",   60),
+    ("icon-80.png",  80), ("icon-87.png",  87), ("icon-120.png", 120),
+    ("icon-180.png", 180), ("icon-1024.png", 1024),
+]
+for name, size in sizes:
+    img = logo.resize((size, size), Image.LANCZOS)
+    img.save(os.path.join(icon_dir, name))
+    print(f"  ✅ {name} ({size}x{size})")
+print("✅ App icon set from logo")
+PYEOF
 
       - name: Generate Xcode Project
         run: |
