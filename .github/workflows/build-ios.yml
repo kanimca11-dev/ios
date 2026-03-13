@@ -87,8 +87,13 @@ jobs:
               ("icon-180.png", 180), ("icon-1024.png", 1024),
           ]
           for name, size in sizes:
-              img = logo.resize((size, size), Image.LANCZOS)
-              img.save(os.path.join(icon_dir, name))
+              canvas = Image.new("RGBA", (size, size), (255, 255, 255, 255))
+              thumb = logo.copy()
+              thumb.thumbnail((size, size), Image.LANCZOS)
+              x = (size - thumb.width) // 2
+              y = (size - thumb.height) // 2
+              canvas.paste(thumb, (x, y), thumb)
+              canvas.convert("RGB").save(os.path.join(icon_dir, name))
               print("  done: " + name)
           print("App icon set from logo")
           PYEOF
