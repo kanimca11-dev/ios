@@ -75,11 +75,14 @@ jobs:
 
               # iOS required sizes — "filename:pixels" pairs (bash 3.2 compatible)
               ICON_SIZES="icon-40.png:40 icon-58.png:58 icon-60.png:60 icon-80.png:80 icon-87.png:87 icon-120.png:120 icon-180.png:180 icon-1024.png:1024"
+              ORIGINAL_LOGO="$LOGO_FILE"
 
               for ENTRY in $ICON_SIZES; do
                 FILENAME="${ENTRY%%:*}"
                 SIZE="${ENTRY##*:}"
-                sips -z "$SIZE" "$SIZE" "$LOGO_FILE" --out "${ICON_DIR}/${FILENAME}" > /dev/null 2>&1
+                # Copy original each time — sips may resize the source file in-place
+                cp "$ORIGINAL_LOGO" /tmp/sips_input.png
+                sips -z "$SIZE" "$SIZE" /tmp/sips_input.png --out "${ICON_DIR}/${FILENAME}" > /dev/null 2>&1
                 echo "  ✅ ${FILENAME} (${SIZE}x${SIZE})"
               done
 
