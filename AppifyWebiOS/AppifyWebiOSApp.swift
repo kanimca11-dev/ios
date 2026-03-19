@@ -114,33 +114,31 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - App Shell (WebView + optional bottom nav)
+    // MARK: - App Shell (WebView + optional floating nav pill)
 
     private func appShell(config: AppConfig) -> some View {
         let showNav = config.features.showBottomNav && !shouldHideNav(config: config)
-        return VStack(spacing: 0) {
-            WebView(
-                url: URL(string: config.targetUrl)!,
-                navigationState: nav,
-                userAgentSuffix: config.userAgentSuffix,
-                onFirstPageLoaded: {
-                    withAnimation(.easeOut(duration: 0.6)) { showSplash = false }
-                }
-            )
+        return WebView(
+            url: URL(string: config.targetUrl)!,
+            navigationState: nav,
+            userAgentSuffix: config.userAgentSuffix,
+            onFirstPageLoaded: {
+                withAnimation(.easeOut(duration: 0.6)) { showSplash = false }
+            }
+        )
+        .ignoresSafeArea(edges: .bottom)
+        .background(secondaryColor.ignoresSafeArea())
+        .overlay(alignment: .bottom) {
             if showNav {
                 bottomNavBar(config: config)
             }
         }
-        // VStack ignores bottom safe area so bottomNavBar physically extends
-        // into the home indicator region (padding inside the nav bar accounts for it)
-        .ignoresSafeArea(edges: .bottom)
-        .background(secondaryColor.ignoresSafeArea(edges: .top))
     }
 
-    // MARK: - Bottom Navigation Bar (actually navigates — fixes original bug)
+    // MARK: - Floating Pill Navigation Bar
 
     private func bottomNavBar(config: AppConfig) -> some View {
-        // Read the actual home indicator height at runtime
+        // Safe area bottom inset so the pill sits just above the home indicator
         let homeInset: CGFloat = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?
             .windows.first?.safeAreaInsets.bottom ?? 0
 
@@ -160,31 +158,33 @@ struct ContentView: View {
                     }
                     nav.navigateTo = dest
                 } label: {
-                    VStack(spacing: 3) {
+                    VStack(spacing: 5) {
                         Image(systemName: sfSymbol(for: tab.icon))
                             .font(.system(size: 20, weight: isActive ? .semibold : .regular))
                             .symbolVariant(isActive ? .fill : .none)
+                            .foregroundColor(isActive ? primaryColor : .white.opacity(0.45))
                             .frame(width: 24, height: 24)
-                        Text(tab.label)
-                            .font(.system(size: 10, weight: .medium))
-                            .lineLimit(1)
+
+                        // Active indicator dot
+                        Circle()
+                            .fill(primaryColor)
+                            .frame(width: 4, height: 4)
+                            .opacity(isActive ? 1 : 0)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
                     .contentShape(Rectangle())
-                    .foregroundColor(isActive ? .white : .white.opacity(0.65))
                 }
             }
         }
-        // 8pt above icons, 8pt below icons + home indicator height = icons sit
-        // just above the home indicator bar, matching standard iOS tab bar layout
-        .padding(.top, 8)
-        .padding(.bottom, 8 + homeInset)
-        .background(secondaryColor)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .frame(height: 0.5)
-                .foregroundColor(.white.opacity(0.15))
-        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 8)
+        .background(
+            Capsule()
+                .fill(secondaryColor)
+                .shadow(color: .black.opacity(0.35), radius: 20, x: 0, y: 8)
+        )
+        .padding(.horizontal, 20)
+        .padding(.bottom, homeInset > 0 ? homeInset + 8 : 16)
     }
 
     // MARK: - Splash Overlay
