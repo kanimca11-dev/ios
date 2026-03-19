@@ -176,7 +176,7 @@ struct ContentView: View {
                 }
             }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 2)
         .padding(.horizontal, 8)
         .background(
             Capsule()
@@ -184,7 +184,7 @@ struct ContentView: View {
                 .shadow(color: .black.opacity(0.35), radius: 20, x: 0, y: 8)
         )
         .padding(.horizontal, 20)
-        .padding(.bottom, 2)
+        .padding(.bottom, 0)
     }
 
     // MARK: - Splash Overlay
