@@ -185,6 +185,7 @@ struct ContentView: View {
         )
         .padding(.horizontal, 20)
         .padding(.bottom, 0)
+        .offset(y: 6)
     }
 
     // MARK: - Splash Overlay
