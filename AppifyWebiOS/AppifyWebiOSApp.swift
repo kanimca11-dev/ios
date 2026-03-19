@@ -184,7 +184,7 @@ struct ContentView: View {
                 .shadow(color: .black.opacity(0.35), radius: 20, x: 0, y: 8)
         )
         .padding(.horizontal, 20)
-        .padding(.bottom, homeInset > 0 ? homeInset + 8 : 16)
+        .padding(.bottom, homeInset > 0 ? homeInset : 4)
     }
 
     // MARK: - Splash Overlay
