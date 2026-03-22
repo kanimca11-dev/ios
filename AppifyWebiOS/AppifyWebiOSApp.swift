@@ -127,34 +127,22 @@ struct ContentView: View {
     private func appShell(config: AppConfig) -> some View {
         let showNav = config.features.showBottomNav && !shouldHideNav(config: config)
 
-        return ZStack {
-            WebView(
-                url: URL(string: config.targetUrl)!,
-                navigationState: nav,
-                userAgentSuffix: config.userAgentSuffix,
-                onFirstPageLoaded: {
-                    withAnimation(.easeOut(duration: 0.5)) {
-                        showSplash = false
-                    }
+        return WebView(
+            url: URL(string: config.targetUrl)!,
+            navigationState: nav,
+            userAgentSuffix: config.userAgentSuffix,
+            onFirstPageLoaded: {
+                withAnimation(.easeOut(duration: 0.5)) {
+                    showSplash = false
                 }
-            )
-            .ignoresSafeArea(edges: .bottom)
-        }
-        .background(secondaryColor.ignoresSafeArea())
-
-        // 🔥 Ultra premium safe area handling
+            }
+        )
+        .ignoresSafeArea(edges: .bottom)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showNav {
-                ZStack(alignment: .bottom) {
-
-                    // ✅ Fill bottom (no gap ever)
-                    secondaryColor
-                        .ignoresSafeArea()
-
-                    // ✅ Premium floating nav
-                    bottomNavBar(config: config)
-                        .padding(.bottom, 6)
-                }
+                bottomNavBar(config: config)
+                    .padding(.bottom, 0)
+                    .background(secondaryColor.ignoresSafeArea(edges: .bottom))
             }
         }
     }
