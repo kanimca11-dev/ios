@@ -136,21 +136,17 @@ struct ContentView: View {
         )
         .ignoresSafeArea(edges: .bottom)
         .background(secondaryColor.ignoresSafeArea())
-        .overlay(alignment: .bottom) {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             if showNav {
                 bottomNavBar(config: config)
             }
         }
     }
 
-    // MARK: - Floating Pill Navigation Bar
+    // MARK: - Bottom Navigation Bar
 
     private func bottomNavBar(config: AppConfig) -> some View {
-        // Safe area bottom inset so the pill sits just above the home indicator
-        let homeInset: CGFloat = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?
-            .windows.first?.safeAreaInsets.bottom ?? 0
-
-        return HStack(spacing: 0) {
+        HStack(spacing: 0) {
             ForEach(config.features.navigationTabs) { tab in
                 let isActive = !tab.path.isEmpty && nav.currentUrl.contains(tab.path)
 
@@ -173,7 +169,6 @@ struct ContentView: View {
                             .foregroundColor(isActive ? primaryColor : .white.opacity(0.45))
                             .frame(width: 24, height: 24)
 
-                        // Active indicator dot
                         Circle()
                             .fill(primaryColor)
                             .frame(width: 4, height: 4)
@@ -192,8 +187,7 @@ struct ContentView: View {
                 .shadow(color: .black.opacity(0.35), radius: 20, x: 0, y: 8)
         )
         .padding(.horizontal, 20)
-        .padding(.bottom, max(homeInset, 4))
-        .offset(y: 0)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Splash Overlay

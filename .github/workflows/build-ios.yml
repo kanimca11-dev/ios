@@ -91,23 +91,84 @@ jobs:
           print(f'✅ LaunchBackgroundColor set to #{hex_color} ({r:.3f}, {g:.3f}, {b:.3f})')
           PYEOF
 
-      - name: Embed Splash Image into LaunchScreen Asset
+      - name: Generate Fullscreen Splash Image
         run: |
           SPLASH_URL="${{ github.event.client_payload.splash_url || github.event.inputs.splash_url }}"
+          LOGO_URL="${{ github.event.client_payload.logo_url || github.event.inputs.logo_url }}"
+          SEC_COLOR="${{ github.event.client_payload.secondary_color || github.event.inputs.secondary_color || '#FFFFFF' }}"
           ASSET_DIR="AppifyWebiOS/Assets.xcassets/LaunchSplash.imageset"
 
-          if [ -z "$SPLASH_URL" ]; then
-            echo "⚠️ No splash URL — LaunchScreen will use background color only"
+          # Prefer splash_url, fall back to logo_url for the source image
+          IMG_URL="${SPLASH_URL:-$LOGO_URL}"
+
+          if [ -z "$IMG_URL" ]; then
+            echo "⚠️ No splash or logo URL — LaunchScreen will use background color only"
             exit 0
           fi
 
-          echo "Downloading splash from: ${SPLASH_URL}"
-          if ! curl -L -f -o "${ASSET_DIR}/launch_splash.png" "${SPLASH_URL}" 2>/dev/null; then
-            echo "⚠️ Failed to download splash image"
+          echo "Downloading source image from: ${IMG_URL}"
+          if ! curl -L -f -o /tmp/splash_source_raw "${IMG_URL}" 2>/dev/null; then
+            echo "⚠️ Failed to download image"
             exit 0
           fi
 
-          echo "✅ Splash image embedded into LaunchSplash asset"
+          pip3 install --quiet Pillow 2>/dev/null || \
+            pip3 install --quiet --break-system-packages Pillow 2>/dev/null || true
+
+          python3 - <<PYEOF
+          import sys, os
+          try:
+              from PIL import Image, ImageDraw
+          except ImportError:
+              print("Pillow not available — skipping splash generation")
+              sys.exit(0)
+
+          # Canvas size: iPhone Pro Max @3x
+          W, H = 1242, 2688
+          ASSET_DIR = "${ASSET_DIR}"
+
+          # Parse background color
+          hex_color = "${SEC_COLOR}".strip().lstrip('#')
+          if len(hex_color) == 3:
+              hex_color = ''.join(c*2 for c in hex_color)
+          try:
+              r = int(hex_color[0:2], 16)
+              g = int(hex_color[2:4], 16)
+              b = int(hex_color[4:6], 16)
+              bg = (r, g, b, 255)
+          except Exception:
+              bg = (255, 255, 255, 255)
+
+          # Create full-screen canvas with brand background
+          canvas = Image.new("RGBA", (W, H), bg)
+
+          # Load and place the source image
+          src = Image.open("/tmp/splash_source_raw").convert("RGBA")
+
+          # If source image is already large enough to fill (e.g. a proper splash),
+          # scale it to fill the canvas.
+          src_w, src_h = src.size
+          if src_w >= W * 0.8 and src_h >= H * 0.8:
+              # Scale to fill
+              scale = max(W / src_w, H / src_h)
+              new_w = int(src_w * scale)
+              new_h = int(src_h * scale)
+              src = src.resize((new_w, new_h), Image.LANCZOS)
+              x = (W - new_w) // 2
+              y = (H - new_h) // 2
+              canvas.paste(src, (x, y), src)
+          else:
+              # Source is a small logo — center it at 40% of screen width
+              logo_size = int(W * 0.40)
+              src.thumbnail((logo_size, logo_size), Image.LANCZOS)
+              lw, lh = src.size
+              x = (W - lw) // 2
+              y = (H - lh) // 2
+              canvas.paste(src, (x, y), src)
+
+          canvas.convert("RGB").save(os.path.join(ASSET_DIR, "launch_splash.png"))
+          print(f"✅ Fullscreen splash generated: {W}x{H} with background #{hex_color}")
+          PYEOF
 
       - name: Set App Icon from Logo URL
         run: |
