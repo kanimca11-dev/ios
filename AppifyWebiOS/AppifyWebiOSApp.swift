@@ -126,25 +126,40 @@ struct ContentView: View {
 
     private func appShell(config: AppConfig) -> some View {
         let showNav = config.features.showBottomNav && !shouldHideNav(config: config)
-        return WebView(
-            url: URL(string: config.targetUrl)!,
-            navigationState: nav,
-            userAgentSuffix: config.userAgentSuffix,
-            onFirstPageLoaded: {
-                withAnimation(.easeOut(duration: 0.6)) { showSplash = false }
-            }
-        )
-        .ignoresSafeArea(edges: .bottom)
+
+        return ZStack {
+            WebView(
+                url: URL(string: config.targetUrl)!,
+                navigationState: nav,
+                userAgentSuffix: config.userAgentSuffix,
+                onFirstPageLoaded: {
+                    withAnimation(.easeOut(duration: 0.5)) {
+                        showSplash = false
+                    }
+                }
+            )
+            .ignoresSafeArea(edges: .bottom)
+        }
         .background(secondaryColor.ignoresSafeArea())
+
+        // 🔥 Ultra premium safe area handling
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showNav {
-                bottomNavBar(config: config)
+                ZStack(alignment: .bottom) {
+
+                    // ✅ Fill bottom (no gap ever)
+                    secondaryColor
+                        .ignoresSafeArea()
+
+                    // ✅ Premium floating nav
+                    bottomNavBar(config: config)
+                        .padding(.bottom, 6)
+                }
             }
         }
     }
 
     // MARK: - Bottom Navigation Bar
-
     private func bottomNavBar(config: AppConfig) -> some View {
         HStack(spacing: 0) {
             ForEach(config.features.navigationTabs) { tab in
@@ -152,6 +167,7 @@ struct ContentView: View {
 
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
                     let dest: String
                     if tab.path.hasPrefix("http") {
                         dest = tab.path
@@ -161,37 +177,51 @@ struct ContentView: View {
                         dest = base + path
                     }
                     nav.navigateTo = dest
+
                 } label: {
-                    VStack(spacing: 5) {
+                    VStack(spacing: 6) {
+
                         Image(systemName: sfSymbol(for: tab.icon))
                             .font(.system(size: 20, weight: isActive ? .semibold : .regular))
                             .symbolVariant(isActive ? .fill : .none)
-                            .foregroundColor(isActive ? primaryColor : .white.opacity(0.45))
-                            .frame(width: 24, height: 24)
+                            .foregroundColor(isActive ? primaryColor : .white.opacity(0.5))
+                            .scaleEffect(isActive ? 1.15 : 1.0)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
 
                         Circle()
                             .fill(primaryColor)
-                            .frame(width: 4, height: 4)
+                            .frame(width: 5, height: 5)
                             .opacity(isActive ? 1 : 0)
+                            .scaleEffect(isActive ? 1 : 0.5)
+                            .animation(.easeInOut(duration: 0.2), value: isActive)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
-                    .contentShape(Rectangle())
+                    .frame(maxWidth: .infinity, minHeight: 55)
                 }
             }
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 8)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+
+        // 🔥 GLASS BACKGROUND
         .background(
-            Capsule()
-                .fill(secondaryColor)
-                .shadow(color: .black.opacity(0.35), radius: 20, x: 0, y: 8)
+            ZStack {
+                // Blur layer
+                BlurView(style: .systemUltraThinMaterialDark)
+
+                // Tint overlay
+                secondaryColor.opacity(0.7)
+            }
+            .clipShape(Capsule())
         )
+        .overlay(
+            Capsule()
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.25), radius: 15, x: 0, y: 6)
         .padding(.horizontal, 20)
-        .padding(.bottom, 4)
     }
 
     // MARK: - Splash Overlay
-
     @ViewBuilder
     private var splashOverlay: some View {
         if showSplash {
@@ -327,5 +357,17 @@ struct ContentView: View {
         }
         guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
         scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask))
+    }
+}
+
+// MARK: - UIKit Blur Wrapper
+
+struct BlurView: UIViewRepresentable {
+    let style: UIBlurEffect.Style
+    func makeUIView(context: Context) -> UIVisualEffectView {
+        UIVisualEffectView(effect: UIBlurEffect(style: style))
+    }
+    func updateUIView(_ uiView: UIVisualEffectView, context: Context) {
+        uiView.effect = UIBlurEffect(style: style)
     }
 }
