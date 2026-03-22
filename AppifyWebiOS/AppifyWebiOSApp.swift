@@ -142,7 +142,7 @@ struct ContentView: View {
         .overlay(alignment: .bottom) {
             if showNav {
                 bottomNavBar(config: config)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 0)
             }
         }
     }
