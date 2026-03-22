@@ -142,7 +142,6 @@ struct ContentView: View {
         .overlay(alignment: .bottom) {
             if showNav {
                 bottomNavBar(config: config)
-                    .padding(.bottom, 0)
             }
         }
     }
@@ -185,8 +184,10 @@ struct ContentView: View {
                 }
             }
         }
-        .padding(.vertical, 8) // 👈 reduced
+        .padding(.vertical, 8)
         .padding(.horizontal, 10)
+        .padding(.bottom, (UIApplication.shared.connectedScenes.first as? UIWindowScene)?
+            .windows.first?.safeAreaInsets.bottom ?? 0)
 
         .background(
             ZStack {
@@ -200,7 +201,6 @@ struct ContentView: View {
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 4)
-
         .padding(.horizontal, 16)
     }
 
