@@ -63,8 +63,10 @@ targets:
           - remote-notification
           - fetch
 
-        # ── Launch screen (full storyboard — supports splash image) ───────────
-        UILaunchStoryboardName: LaunchScreen
+        # ── Launch screen (Info.plist based — no storyboard needed) ───────────
+        UILaunchScreen:
+          UIColorName: LaunchBackgroundColor
+          UIImageName: LaunchSplash
 
         UIUserInterfaceStyle: Light
         # Force white status bar text (suits dark secondary-color nav bars)
