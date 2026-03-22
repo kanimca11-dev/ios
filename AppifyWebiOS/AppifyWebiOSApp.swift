@@ -137,7 +137,7 @@ struct ContentView: View {
                 }
             }
         )
-        .ignoresSafeArea(edges: .bottom)
+        //.ignoresSafeArea(edges: .bottom)
         .background(secondaryColor.ignoresSafeArea(edges: .top))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showNav {
@@ -167,36 +167,30 @@ struct ContentView: View {
                     nav.navigateTo = dest
 
                 } label: {
-                    VStack(spacing: 6) {
+                    VStack(spacing: 4) { // 👈 reduced
 
                         Image(systemName: sfSymbol(for: tab.icon))
-                            .font(.system(size: 20, weight: isActive ? .semibold : .regular))
+                            .font(.system(size: 18, weight: isActive ? .semibold : .regular)) // 👈 smaller
                             .symbolVariant(isActive ? .fill : .none)
                             .foregroundColor(isActive ? primaryColor : .white.opacity(0.5))
-                            .scaleEffect(isActive ? 1.15 : 1.0)
+                            .scaleEffect(isActive ? 1.1 : 1.0)
                             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
 
                         Circle()
                             .fill(primaryColor)
-                            .frame(width: 5, height: 5)
+                            .frame(width: 4, height: 4) // 👈 smaller
                             .opacity(isActive ? 1 : 0)
-                            .scaleEffect(isActive ? 1 : 0.5)
-                            .animation(.easeInOut(duration: 0.2), value: isActive)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 55)
+                    .frame(maxWidth: .infinity, minHeight: 48) // 👈 reduced height
                 }
             }
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 12)
+        .padding(.vertical, 8) // 👈 reduced
+        .padding(.horizontal, 10)
 
-        // 🔥 GLASS BACKGROUND
         .background(
             ZStack {
-                // Blur layer
                 BlurView(style: .systemUltraThinMaterialDark)
-
-                // Tint overlay
                 secondaryColor.opacity(0.7)
             }
             .clipShape(Capsule())
@@ -205,8 +199,10 @@ struct ContentView: View {
             Capsule()
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.25), radius: 15, x: 0, y: 6)
-        .padding(.horizontal, 20)
+        .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 4)
+
+        .padding(.horizontal, 16)
+        .padding(.bottom, 2) // 👈 very small (touch feel)
     }
 
     // MARK: - Splash Overlay
