@@ -60,17 +60,17 @@ struct SplashView: View {
                     Image(uiImage: img)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 140, height: 140)
-                        .clipShape(Circle())
+                        .frame(width: 280, height: 280)
+                        .clipShape(RoundedRectangle(cornerRadius: 56, style: .continuous))
                 } else {
                     ZStack {
                         Circle()
                             .fill(primaryColor.opacity(0.25))
-                            .frame(width: 140, height: 140)
+                            .frame(width: 280, height: 280)
                         Image(systemName: "globe")
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 70, height: 70)
+                            .frame(width: 140, height: 140)
                             .foregroundColor(primaryColor)
                     }
                 }
