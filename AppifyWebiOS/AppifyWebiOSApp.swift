@@ -122,7 +122,7 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - App Shell (WebView + optional bottom nav)
+    // MARK: - App Shell (WebView + optional floating nav pill)
 
     private func appShell(config: AppConfig) -> some View {
         let showNav = config.features.showBottomNav && !shouldHideNav(config: config)
@@ -142,6 +142,7 @@ struct ContentView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showNav {
                 bottomNavBar(config: config)
+                    .padding(.bottom, 0)
             }
         }
     }
@@ -166,9 +167,10 @@ struct ContentView: View {
                     nav.navigateTo = dest
 
                 } label: {
-                    VStack(spacing: 4) {
+                    VStack(spacing: 4) { // 👈 reduced
+
                         Image(systemName: sfSymbol(for: tab.icon))
-                            .font(.system(size: 18, weight: isActive ? .semibold : .regular))
+                            .font(.system(size: 18, weight: isActive ? .semibold : .regular)) // 👈 smaller
                             .symbolVariant(isActive ? .fill : .none)
                             .foregroundColor(isActive ? primaryColor : .white.opacity(0.5))
                             .scaleEffect(isActive ? 1.1 : 1.0)
@@ -176,28 +178,30 @@ struct ContentView: View {
 
                         Circle()
                             .fill(primaryColor)
-                            .frame(width: 4, height: 4)
+                            .frame(width: 4, height: 4) // 👈 smaller
                             .opacity(isActive ? 1 : 0)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .frame(maxWidth: .infinity, minHeight: 48) // 👈 reduced height
                 }
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 8) // 👈 reduced
         .padding(.horizontal, 10)
-        .frame(maxWidth: .infinity)
+
         .background(
             ZStack {
                 BlurView(style: .systemUltraThinMaterialDark)
                 secondaryColor.opacity(0.7)
             }
-            .ignoresSafeArea(edges: .bottom)
+            .clipShape(Capsule())
         )
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(Color.white.opacity(0.08))
-                .frame(height: 1)
-        }
+        .overlay(
+            Capsule()
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 4)
+
+        .padding(.horizontal, 16)
     }
 
     // MARK: - Splash Overlay
