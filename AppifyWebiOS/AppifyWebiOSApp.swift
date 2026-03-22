@@ -184,7 +184,7 @@ struct ContentView: View {
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 10)
         .padding(.horizontal, 8)
         .background(
             Capsule()
@@ -192,7 +192,7 @@ struct ContentView: View {
                 .shadow(color: .black.opacity(0.35), radius: 20, x: 0, y: 8)
         )
         .padding(.horizontal, 20)
-        .padding(.bottom, 0)
+        .padding(.bottom, max(homeInset, 4))
         .offset(y: 0)
     }
 
