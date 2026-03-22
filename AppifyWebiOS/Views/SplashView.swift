@@ -1,43 +1,39 @@
 import SwiftUI
 
-/// Static full-screen splash — shown while the WebView is loading.
-/// Mirrors the LaunchScreen to prevent any visual flicker between
-/// the system launch screen and the in-app splash.
+/// Static full-screen splash shown while the WebView is loading.
+/// Uses GeometryReader so the image always fills the exact screen bounds
+/// regardless of safe area insets or device size.
 struct SplashView: View {
-    /// Full-screen splash/background image (downloaded from config).
     let splashImage: UIImage?
-    /// Brand primary color — used as background when no image is available.
     let primaryColor: Color
-    /// App logo — centered on top of the color background fallback.
     let logoImage: UIImage?
 
     var body: some View {
-        ZStack {
-            if let splash = splashImage {
-                // ── Full-screen splash image ───────────────────────────────────
-                Image(uiImage: splash)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .ignoresSafeArea()
-            } else {
-                // ── Fallback: solid primary color + centered logo ──────────────
+        GeometryReader { geo in
+            ZStack {
+                // ── Always-present background (fills safe-area gaps, matches LaunchScreen) ──
                 primaryColor
-                    .ignoresSafeArea()
 
-                if let logo = logoImage {
+                if let splash = splashImage {
+                    // ── Full-screen splash image ──────────────────────────────
+                    Image(uiImage: splash)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+
+                } else if let logo = logoImage {
+                    // ── First-launch fallback: color bg + centered logo ───────
                     Image(uiImage: logo)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 180, height: 180)
-                        .clipShape(RoundedRectangle(cornerRadius: 36, style: .continuous))
-                } else {
-                    Image(systemName: "globe")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 100, height: 100)
-                        .foregroundColor(.white.opacity(0.8))
+                        .frame(width: 160, height: 160)
+                        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
                 }
+                // No globe icon — primaryColor handles the no-asset case cleanly
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
+        .ignoresSafeArea()
     }
 }

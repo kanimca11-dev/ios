@@ -23,6 +23,14 @@ on:
         description: 'App Logo URL (used as app icon)'
         required: false
         default: ''
+      splash_url:
+        description: 'Splash Screen image URL (used as LaunchScreen image)'
+        required: false
+        default: ''
+      secondary_color:
+        description: 'Secondary color hex (e.g. #1A1A2E) for LaunchScreen background'
+        required: false
+        default: '#FFFFFF'
       api_url:
         description: 'API Base URL'
         required: false
@@ -49,6 +57,57 @@ jobs:
           sed -i '' "s|CFBundleDisplayName: \"APPIFYWEB_DISPLAY_NAME\"|CFBundleDisplayName: \"${APP_NAME}\"|g" project.yml
 
           echo "✅ Injected — APP_TOKEN, API_BASE_URL, CFBundleDisplayName=${APP_NAME}"
+
+      - name: Inject Launch Background Color
+        run: |
+          SEC_COLOR="${{ github.event.client_payload.secondary_color || github.event.inputs.secondary_color || '#FFFFFF' }}"
+          # Strip leading # and convert to 0.0–1.0 float components
+          HEX=${SEC_COLOR#"#"}
+          python3 - <<PYEOF
+          import json, sys
+          hex_color = '${HEX}'.strip()
+          if len(hex_color) == 3:
+              hex_color = ''.join(c*2 for c in hex_color)
+          r = int(hex_color[0:2], 16) / 255.0
+          g = int(hex_color[2:4], 16) / 255.0
+          b = int(hex_color[4:6], 16) / 255.0
+          contents = {
+            "colors": [{
+              "idiom": "universal",
+              "color": {
+                "color-space": "srgb",
+                "components": {
+                  "red":   f"{r:.3f}",
+                  "green": f"{g:.3f}",
+                  "blue":  f"{b:.3f}",
+                  "alpha": "1.000"
+                }
+              }
+            }],
+            "info": {"author": "xcode", "version": 1}
+          }
+          with open('AppifyWebiOS/Assets.xcassets/LaunchBackgroundColor.colorset/Contents.json', 'w') as f:
+              json.dump(contents, f, indent=2)
+          print(f'✅ LaunchBackgroundColor set to #{hex_color} ({r:.3f}, {g:.3f}, {b:.3f})')
+          PYEOF
+
+      - name: Embed Splash Image into LaunchScreen Asset
+        run: |
+          SPLASH_URL="${{ github.event.client_payload.splash_url || github.event.inputs.splash_url }}"
+          ASSET_DIR="AppifyWebiOS/Assets.xcassets/LaunchSplash.imageset"
+
+          if [ -z "$SPLASH_URL" ]; then
+            echo "⚠️ No splash URL — LaunchScreen will use background color only"
+            exit 0
+          fi
+
+          echo "Downloading splash from: ${SPLASH_URL}"
+          if ! curl -L -f -o "${ASSET_DIR}/launch_splash.png" "${SPLASH_URL}" 2>/dev/null; then
+            echo "⚠️ Failed to download splash image"
+            exit 0
+          fi
+
+          echo "✅ Splash image embedded into LaunchSplash asset"
 
       - name: Set App Icon from Logo URL
         run: |
