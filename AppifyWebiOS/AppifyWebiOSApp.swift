@@ -42,9 +42,11 @@ struct ContentView: View {
     @State private var secondaryColor = Color(hex: ApiService.cachedSecondaryColor())
 
     // Splash logo cached on disk
-    @State private var logoImage: UIImage? = AssetCache.shared.cachedLogo()
+    @State private var logoImage: UIImage?   = AssetCache.shared.cachedLogo()
+    // Full-screen splash image cached on disk
+    @State private var splashImage: UIImage? = AssetCache.shared.cachedSplash()
 
-    // Splash overlay stays until WebView fires onFirstPageLoaded (max 8s safety fallback)
+    // Splash overlay stays until WebView fires onFirstPageLoaded (didFinish)
     @State private var showSplash = true
 
     // Biometric gate
@@ -70,6 +72,12 @@ struct ContentView: View {
             if let logoUrl = cfg.splashLogoUrl {
                 AssetCache.shared.cacheLogo(from: logoUrl) { img in
                     if let img { logoImage = img }
+                }
+            }
+            // Cache full-screen splash image to disk in background
+            if let splashUrl = cfg.splashImageUrl {
+                AssetCache.shared.cacheSplash(from: splashUrl) { img in
+                    if let img { splashImage = img }
                 }
             }
             // Push notifications
@@ -193,15 +201,13 @@ struct ContentView: View {
     @ViewBuilder
     private var splashOverlay: some View {
         if showSplash {
-            SplashView(primaryColor: primaryColor, logoImage: logoImage)
-                .ignoresSafeArea()
-                .transition(.opacity)
-                .onAppear {
-                    // Safety fallback: hide after 8 s if WebView never fires onPageFinished
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
-                        withAnimation(.easeOut(duration: 0.6)) { showSplash = false }
-                    }
-                }
+            SplashView(
+                splashImage:  splashImage,
+                primaryColor: primaryColor,
+                logoImage:    logoImage
+            )
+            .ignoresSafeArea()
+            .transition(.opacity)
         }
     }
 

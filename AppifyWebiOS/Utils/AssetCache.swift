@@ -1,55 +1,54 @@
 import UIKit
 
-/// Downloads and caches the splash logo to disk — mirrors Android's AssetCacheManager.kt
+/// Downloads and caches remote images to disk (logo + splash screen).
 final class AssetCache {
     static let shared = AssetCache()
-    private let cacheFile: URL
+
+    private let dir: URL
+    private var logoFile:   URL { dir.appendingPathComponent("splash_logo.png")   }
+    private var splashFile: URL { dir.appendingPathComponent("splash_screen.png") }
 
     private init() {
-        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        cacheFile = dir.appendingPathComponent("splash_logo.png")
+        dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
     }
 
-    // MARK: - Public
+    // MARK: - Logo
 
-    /// Returns the cached logo UIImage if available, or nil.
-    func cachedLogo() -> UIImage? {
-        guard FileManager.default.fileExists(atPath: cacheFile.path) else { return nil }
-        return UIImage(contentsOfFile: cacheFile.path)
-    }
+    func cachedLogo() -> UIImage? { load(from: logoFile) }
 
-    /// Downloads a logo from `urlString` and writes it to the on-disk cache.
-    /// Calls `completion` on the main queue with the downloaded image (or nil on failure).
     func cacheLogo(from urlString: String, completion: ((UIImage?) -> Void)? = nil) {
+        download(urlString: urlString, to: logoFile, completion: completion)
+    }
+
+    // MARK: - Splash screen
+
+    func cachedSplash() -> UIImage? { load(from: splashFile) }
+
+    func cacheSplash(from urlString: String, completion: ((UIImage?) -> Void)? = nil) {
+        download(urlString: urlString, to: splashFile, completion: completion)
+    }
+
+    // MARK: - Private helpers
+
+    private func load(from file: URL) -> UIImage? {
+        guard FileManager.default.fileExists(atPath: file.path) else { return nil }
+        return UIImage(contentsOfFile: file.path)
+    }
+
+    private func download(urlString: String, to file: URL, completion: ((UIImage?) -> Void)?) {
         guard let url = URL(string: urlString) else {
             DispatchQueue.main.async { completion?(nil) }
             return
         }
-
         URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-            guard let self,
-                  let data,
-                  let image = UIImage(data: data) else {
+            guard self != nil, let data, let image = UIImage(data: data) else {
                 DispatchQueue.main.async { completion?(nil) }
                 return
             }
-
-            // Write PNG to disk
             if let png = image.pngData() {
-                try? png.write(to: self.cacheFile, options: .atomic)
+                try? png.write(to: file, options: .atomic)
             }
-
             DispatchQueue.main.async { completion?(image) }
         }.resume()
-    }
-
-    /// Returns cached image if fresh, otherwise downloads in background and returns nil.
-    /// On completion the next call to `cachedLogo()` will return the new image.
-    func logoForSplash(urlString: String?) -> UIImage? {
-        let cached = cachedLogo()
-        if let urlString, cached == nil {
-            cacheLogo(from: urlString)
-        }
-        return cached
     }
 }

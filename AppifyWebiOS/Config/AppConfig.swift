@@ -6,6 +6,7 @@ struct AppConfig: Codable, Equatable {
     var primaryColor: String
     var secondaryColor: String
     var splashLogoUrl: String?
+    var splashImageUrl: String?   // full-screen background splash image
     var userAgentSuffix: String?
     var subscriptionExpiredMessage: String
     var isActive: Bool
@@ -22,6 +23,7 @@ struct AppConfig: Codable, Equatable {
         primaryColor               = try c.decodeIfPresent(String.self, forKey: .primaryColor)               ?? "#0F9B9B"
         secondaryColor             = try c.decodeIfPresent(String.self, forKey: .secondaryColor)             ?? "#FFFFFF"
         splashLogoUrl              = try c.decodeIfPresent(String.self, forKey: .splashLogoUrl)
+        splashImageUrl             = try c.decodeIfPresent(String.self, forKey: .splashImageUrl)
         userAgentSuffix            = try c.decodeIfPresent(String.self, forKey: .userAgentSuffix)
         subscriptionExpiredMessage = try c.decodeIfPresent(String.self, forKey: .subscriptionExpiredMessage) ?? "Subscription expired."
         isActive                   = try c.decodeIfPresent(Bool.self,   forKey: .isActive)                   ?? true
