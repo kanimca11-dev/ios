@@ -138,11 +138,11 @@ struct ContentView: View {
             }
         )
         .ignoresSafeArea(edges: .bottom)
+        .background(secondaryColor.ignoresSafeArea(edges: .top))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showNav {
                 bottomNavBar(config: config)
                     .padding(.bottom, 0)
-                    .background(secondaryColor.ignoresSafeArea(edges: .bottom))
             }
         }
     }
