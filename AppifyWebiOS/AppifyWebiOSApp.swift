@@ -139,10 +139,10 @@ struct ContentView: View {
         )
         .ignoresSafeArea(edges: .bottom)
         .background(secondaryColor.ignoresSafeArea(edges: .top))
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .overlay(alignment: .bottom) {
             if showNav {
                 bottomNavBar(config: config)
-                    .padding(.bottom, 0)
+                    .padding(.bottom, 4)
             }
         }
     }
