@@ -186,21 +186,22 @@ struct ContentView: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
-        .padding(.bottom, -6)
 
         .background(
             ZStack {
                 BlurView(style: .systemUltraThinMaterialDark)
-                secondaryColor.opacity(0.7)
+                secondaryColor.opacity(0.6)
             }
             .clipShape(Capsule())
         )
         .overlay(
             Capsule()
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
         )
-        .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 4)
-        .padding(.horizontal, 16)
+        .shadow(color: Color.black.opacity(0.3), radius: 15, x: 0, y: 8)
+        .padding(.horizontal, 24) // Adds side inset to make it a floating pill
+        .padding(.bottom, 34)     // Lifts it above the iOS Home Indicator
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: nav.currentUrl)
     }
 
     // MARK: - Splash Overlay
