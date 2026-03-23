@@ -190,17 +190,28 @@ struct ContentView: View {
         .background(
             ZStack {
                 BlurView(style: .systemUltraThinMaterialDark)
-                secondaryColor.opacity(0.6)
+                secondaryColor.opacity(0.3)
             }
             .clipShape(Capsule())
         )
         .overlay(
             Capsule()
-                .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
+            .stroke(
+                LinearGradient(
+                    colors: [
+                        .white.opacity(0.4), // Top "shimmer" edge
+                        .white.opacity(0.1), // Side edge
+                        .clear                // Bottom edge
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                lineWidth: 0.5
+            )
         )
         .shadow(color: Color.black.opacity(0.3), radius: 15, x: 0, y: 8)
         .padding(.horizontal, 24) // Adds side inset to make it a floating pill
-        .padding(.bottom, 34)     // Lifts it above the iOS Home Indicator
+        .padding(.bottom, 2)     // Lifts it above the iOS Home Indicator
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: nav.currentUrl)
     }
 
