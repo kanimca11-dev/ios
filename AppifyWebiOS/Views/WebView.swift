@@ -105,19 +105,23 @@ struct WebView: UIViewRepresentable {
                 parent.onFirstPageLoaded?()
             }
 
-            // Inject throttled scroll listener → posts 'scroll' to Swift bridge
+            // Inject direction-aware scroll listener → posts to Swift bridge
             let scrollJS = """
             (function() {
                 if (window.__appifyScrollListenerInstalled) return;
                 window.__appifyScrollListenerInstalled = true;
+                var lastY = window.scrollY;
                 var t = 0;
                 window.addEventListener('scroll', function() {
                     var now = Date.now();
-                    if (now - t > 200) {
-                        t = now;
-                        if (window.webkit && window.webkit.messageHandlers.AppifyWeb) {
-                            window.webkit.messageHandlers.AppifyWeb.postMessage('scroll');
-                        }
+                    if (now - t < 150) return;
+                    t = now;
+                    var currentY = window.scrollY;
+                    var direction = currentY > lastY ? 'scroll_down' : 'scroll_up';
+                    lastY = currentY;
+                    if (window.webkit && window.webkit.messageHandlers.AppifyWeb) {
+                        window.webkit.messageHandlers.AppifyWeb.postMessage(direction);
+                        window.webkit.messageHandlers.AppifyWeb.postMessage('scroll');
                     }
                 }, { passive: true });
             })();

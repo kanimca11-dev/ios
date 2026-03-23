@@ -56,22 +56,34 @@ struct ContentView: View {
     @State private var navVisible = true
     @State private var navHideTask: DispatchWorkItem?
 
+    // Full-screen on scroll down
+    @State private var hideStatusBar = false
+
     var body: some View {
         ZStack {
             mainContent
             splashOverlay
         }
+        .statusBarHidden(hideStatusBar, animation: .fade)
         // Push notification deep-link: when user taps a notification, navigate WebView
         .onChange(of: pushService.pendingDeepLinkUrl) { url in
             guard let url else { return }
             nav.navigateTo = url
             pushService.pendingDeepLinkUrl = nil
         }
-        // Scroll signal from JS bridge → show nav + reset timer
+        // Scroll direction from JS bridge
         .onReceive(NotificationCenter.default.publisher(for: .webViewJSMessage)) { note in
-            guard let msg = note.userInfo?["message"] as? String,
-                  msg == "scroll" else { return }
-            showNav()
+            guard let msg = note.userInfo?["message"] as? String else { return }
+            switch msg {
+            case "scroll_down":
+                withAnimation(.easeInOut(duration: 0.3)) { hideStatusBar = true }
+            case "scroll_up":
+                withAnimation(.easeInOut(duration: 0.3)) { hideStatusBar = false }
+                showNav()
+            case "scroll":
+                showNav()
+            default: break
+            }
         }
         .onChange(of: apiService.appConfig) { cfg in
             guard let cfg else { return }
@@ -183,22 +195,22 @@ struct ContentView: View {
                     VStack(spacing: 4) { // 👈 reduced
 
                         Image(systemName: sfSymbol(for: tab.icon))
-                            .font(.system(size: 18, weight: isActive ? .semibold : .regular)) // 👈 smaller
+                            .font(.system(size: 18, weight: isActive ? .semibold : .regular))
                             .symbolVariant(isActive ? .fill : .none)
-                            .foregroundColor(isActive ? primaryColor : .white.opacity(0.5))
+                            .foregroundColor(isActive ? secondaryColor : secondaryColor.opacity(0.4))
                             .scaleEffect(isActive ? 1.1 : 1.0)
                             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
 
                         Circle()
-                            .fill(primaryColor)
-                            .frame(width: 4, height: 4) // 👈 smaller
+                            .fill(secondaryColor)
+                            .frame(width: 4, height: 4)
                             .opacity(isActive ? 1 : 0)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 48) // 👈 reduced height
+                    .frame(maxWidth: .infinity, minHeight: 36)
                 }
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
         .padding(.horizontal, 10)
         .padding(.bottom, (UIApplication.shared.connectedScenes.first as? UIWindowScene)?
             .windows.first?.safeAreaInsets.bottom ?? 0)
