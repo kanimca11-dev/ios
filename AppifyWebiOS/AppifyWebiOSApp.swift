@@ -186,7 +186,7 @@ struct ContentView: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
-        .padding(.bottom, 0)
+        .padding(.bottom, -6)
 
         .background(
             ZStack {
