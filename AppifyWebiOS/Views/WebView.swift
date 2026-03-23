@@ -105,6 +105,25 @@ struct WebView: UIViewRepresentable {
                 parent.onFirstPageLoaded?()
             }
 
+            // Inject throttled scroll listener → posts 'scroll' to Swift bridge
+            let scrollJS = """
+            (function() {
+                if (window.__appifyScrollListenerInstalled) return;
+                window.__appifyScrollListenerInstalled = true;
+                var t = 0;
+                window.addEventListener('scroll', function() {
+                    var now = Date.now();
+                    if (now - t > 200) {
+                        t = now;
+                        if (window.webkit && window.webkit.messageHandlers.AppifyWeb) {
+                            window.webkit.messageHandlers.AppifyWeb.postMessage('scroll');
+                        }
+                    }
+                }, { passive: true });
+            })();
+            """
+            wv.evaluateJavaScript(scrollJS, completionHandler: nil)
+
             // Mirror Android UserUtils: cache localStorage JSON
             wv.evaluateJavaScript("JSON.stringify(localStorage)") { result, _ in
                 if let json = result as? String {

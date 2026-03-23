@@ -52,6 +52,10 @@ struct ContentView: View {
     // Biometric gate
     @State private var isUnlocked = false
 
+    // Nav auto-hide
+    @State private var navVisible = true
+    @State private var navHideTask: DispatchWorkItem?
+
     var body: some View {
         ZStack {
             mainContent
@@ -62,6 +66,12 @@ struct ContentView: View {
             guard let url else { return }
             nav.navigateTo = url
             pushService.pendingDeepLinkUrl = nil
+        }
+        // Scroll signal from JS bridge → show nav + reset timer
+        .onReceive(NotificationCenter.default.publisher(for: .webViewJSMessage)) { note in
+            guard let msg = note.userInfo?["message"] as? String,
+                  msg == "scroll" else { return }
+            showNav()
         }
         .onChange(of: apiService.appConfig) { cfg in
             guard let cfg else { return }
@@ -142,8 +152,12 @@ struct ContentView: View {
         .overlay(alignment: .bottom) {
             if showNav {
                 bottomNavBar(config: config)
+                    .opacity(navVisible ? 1 : 0)
+                    .offset(y: navVisible ? 0 : 20)
+                    .animation(.easeInOut(duration: 0.3), value: navVisible)
             }
         }
+        .onAppear { scheduleNavHide() }
     }
 
     // MARK: - Bottom Navigation Bar
@@ -186,28 +200,15 @@ struct ContentView: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
-
+        .padding(.bottom, (UIApplication.shared.connectedScenes.first as? UIWindowScene)?
+            .windows.first?.safeAreaInsets.bottom ?? 0)
         .background(
-            ZStack {
-                BlurView(style: .systemUltraThinMaterialDark)
-                secondaryColor.opacity(0.3)
-            }
-            .clipShape(Capsule())
+            Capsule()
+                .fill(.ultraThinMaterial)
         )
         .overlay(
             Capsule()
-            .stroke(
-                LinearGradient(
-                    colors: [
-                        .white.opacity(0.4), // Top "shimmer" edge
-                        .white.opacity(0.1), // Side edge
-                        .clear                // Bottom edge
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ),
-                lineWidth: 0.5
-            )
+                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
         )
         .shadow(color: Color.black.opacity(0.3), radius: 15, x: 0, y: 8)
         .padding(.horizontal, 24) // Adds side inset to make it a floating pill
@@ -269,6 +270,22 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(UIColor.systemBackground).ignoresSafeArea())
+    }
+
+    // MARK: - Nav auto-hide helpers
+
+    private func showNav() {
+        withAnimation(.easeInOut(duration: 0.25)) { navVisible = true }
+        scheduleNavHide()
+    }
+
+    private func scheduleNavHide() {
+        navHideTask?.cancel()
+        let task = DispatchWorkItem {
+            withAnimation(.easeInOut(duration: 0.4)) { navVisible = false }
+        }
+        navHideTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: task)
     }
 
     // MARK: - Helpers
