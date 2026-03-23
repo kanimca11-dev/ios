@@ -195,10 +195,10 @@ struct ContentView: View {
                     VStack(spacing: 4) { // 👈 reduced
 
                         Image(systemName: sfSymbol(for: tab.icon))
-                            .font(.system(size: 18, weight: isActive ? .semibold : .regular))
+                            .font(.system(size: 16, weight: isActive ? .semibold : .regular))
                             .symbolVariant(isActive ? .fill : .none)
-                            .foregroundColor(isActive ? secondaryColor : secondaryColor.opacity(0.4))
-                            .scaleEffect(isActive ? 1.1 : 1.0)
+                            .foregroundColor(isActive ? secondaryColor : secondaryColor.opacity(0.35))
+                            .scaleEffect(isActive ? 1.05 : 1.0)
                             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
 
                         Circle()
@@ -206,25 +206,27 @@ struct ContentView: View {
                             .frame(width: 4, height: 4)
                             .opacity(isActive ? 1 : 0)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .frame(maxWidth: .infinity, minHeight: 32)
                 }
             }
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 14)
         .padding(.bottom, (UIApplication.shared.connectedScenes.first as? UIWindowScene)?
             .windows.first?.safeAreaInsets.bottom ?? 0)
         .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
+            ZStack {
+                Capsule().fill(.ultraThinMaterial)
+                Capsule().fill(Color.white.opacity(0.65))
+            }
         )
         .overlay(
             Capsule()
-                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
         )
-        .shadow(color: Color.black.opacity(0.3), radius: 15, x: 0, y: 8)
-        .padding(.horizontal, 24) // Adds side inset to make it a floating pill
-        .padding(.bottom, 2)     // Lifts it above the iOS Home Indicator
+        .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 3)
+        .padding(.horizontal, 52)
+        .padding(.bottom, 6)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: nav.currentUrl)
     }
 

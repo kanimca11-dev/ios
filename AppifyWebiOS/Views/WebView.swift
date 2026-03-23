@@ -105,11 +105,33 @@ struct WebView: UIViewRepresentable {
                 parent.onFirstPageLoaded?()
             }
 
-            // Inject direction-aware scroll listener → posts to Swift bridge
+            // Inject direction-aware scroll listener + CSS header auto-hide
             let scrollJS = """
             (function() {
                 if (window.__appifyScrollListenerInstalled) return;
                 window.__appifyScrollListenerInstalled = true;
+
+                // Inject header hide CSS
+                var style = document.createElement('style');
+                style.innerHTML = [
+                    'header, nav, .navbar, .header, .top-bar,',
+                    '[class*="header"], [class*="top-nav"], [class*="navbar"] {',
+                    '  transition: transform 0.3s ease, opacity 0.3s ease !important;',
+                    '}',
+                    '.appify-scroll-down header,',
+                    '.appify-scroll-down nav,',
+                    '.appify-scroll-down .navbar,',
+                    '.appify-scroll-down .header,',
+                    '.appify-scroll-down .top-bar,',
+                    '.appify-scroll-down [class*="header"],',
+                    '.appify-scroll-down [class*="top-nav"],',
+                    '.appify-scroll-down [class*="navbar"] {',
+                    '  transform: translateY(-110%) !important;',
+                    '  opacity: 0 !important;',
+                    '}'
+                ].join('\\n');
+                document.head.appendChild(style);
+
                 var lastY = window.scrollY;
                 var t = 0;
                 window.addEventListener('scroll', function() {
@@ -119,6 +141,14 @@ struct WebView: UIViewRepresentable {
                     var currentY = window.scrollY;
                     var direction = currentY > lastY ? 'scroll_down' : 'scroll_up';
                     lastY = currentY;
+
+                    // Toggle CSS class for header hide
+                    if (direction === 'scroll_down' && currentY > 60) {
+                        document.documentElement.classList.add('appify-scroll-down');
+                    } else if (direction === 'scroll_up') {
+                        document.documentElement.classList.remove('appify-scroll-down');
+                    }
+
                     if (window.webkit && window.webkit.messageHandlers.AppifyWeb) {
                         window.webkit.messageHandlers.AppifyWeb.postMessage(direction);
                         window.webkit.messageHandlers.AppifyWeb.postMessage('scroll');
