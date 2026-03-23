@@ -64,7 +64,7 @@ struct ContentView: View {
             mainContent
             splashOverlay
         }
-        .statusBarHidden(hideStatusBar, animation: .fade)
+        .statusBarHidden(hideStatusBar)
         // Push notification deep-link: when user taps a notification, navigate WebView
         .onChange(of: pushService.pendingDeepLinkUrl) { url in
             guard let url else { return }
