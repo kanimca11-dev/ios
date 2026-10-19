@@ -1,277 +1,85 @@
 name: Build iOS App
-run-name: Build iOS ${{ github.event.client_payload.app_name || 'App' }} (Build #${{ github.event.client_payload.build_id || github.event.inputs.build_id }})
-
+run-name: Build iOS app
 on:
   repository_dispatch:
     types: [build-ios-request]
   workflow_dispatch:
     inputs:
       app_token:
-        description: 'App Token'
+        description: Platform app token
         required: true
       app_id:
-        description: 'App ID'
+        description: App ID
         required: true
       build_id:
-        description: 'Build ID'
+        description: Build ID
         required: true
       app_name:
-        description: 'App Display Name'
-        required: false
-        default: 'AppifyWeb'
+        description: App display name
+        default: AppifyWeb
       logo_url:
-        description: 'App Logo URL (used as app icon)'
-        required: false
-        default: ''
+        description: HTTPS app logo URL
       splash_url:
-        description: 'Splash Screen image URL (used as LaunchScreen image)'
-        required: false
-        default: ''
+        description: HTTPS wizard artwork URL
       secondary_color:
-        description: 'Secondary color hex (e.g. #1A1A2E) for LaunchScreen background'
-        required: false
+        description: Launch background hex color
         default: '#FFFFFF'
       api_url:
-        description: 'API Base URL'
-        required: false
-        default: 'https://www.appifyweb24.com/backend/index.php/'
-
+        description: HTTPS API base URL
+        default: https://www.appifyweb24.com/backend/index.php/
+      target_url:
+        description: HTTPS website URL (including app-mode query)
+      package_name:
+        description: Apple bundle identifier
+        default: com.example.appifyweb
+permissions:
+  contents: read
 jobs:
   build-ios:
     runs-on: macos-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Inject App Token, API URL, and Display Name
-        run: |
-          APP_TOKEN="${{ github.event.client_payload.app_token || github.event.inputs.app_token }}"
-          API_URL="${{ github.event.client_payload.api_url || github.event.inputs.api_url || 'https://www.appifyweb24.com/backend/index.php/' }}"
-          APP_NAME="${{ github.event.client_payload.app_name || github.event.inputs.app_name || 'AppifyWeb' }}"
-
-          sed -i '' "s|APP_TOKEN: \"default_token\"|APP_TOKEN: \"${APP_TOKEN}\"|g" project.yml
-          sed -i '' "s|API_BASE_URL: \"https://www.appifyweb24.com/backend/index.php\"|API_BASE_URL: \"${API_URL}\"|g" project.yml
-          sed -i '' "s|CFBundleDisplayName: \"APPIFYWEB_DISPLAY_NAME\"|CFBundleDisplayName: \"${APP_NAME}\"|g" project.yml
-
-          echo "✅ Injected — APP_TOKEN, API_BASE_URL, CFBundleDisplayName=${APP_NAME}"
-
-      - name: Inject Launch Background Color
-        run: |
-          SEC_COLOR="${{ github.event.client_payload.secondary_color || github.event.inputs.secondary_color || '#FFFFFF' }}"
-          # Strip leading # and convert to 0.0–1.0 float components
-          HEX=${SEC_COLOR#"#"}
-          python3 - <<PYEOF
-          import json, sys
-          hex_color = '${HEX}'.strip()
-          if len(hex_color) == 3:
-              hex_color = ''.join(c*2 for c in hex_color)
-          r = int(hex_color[0:2], 16) / 255.0
-          g = int(hex_color[2:4], 16) / 255.0
-          b = int(hex_color[4:6], 16) / 255.0
-          contents = {
-            "colors": [{
-              "idiom": "universal",
-              "color": {
-                "color-space": "srgb",
-                "components": {
-                  "red":   f"{r:.3f}",
-                  "green": f"{g:.3f}",
-                  "blue":  f"{b:.3f}",
-                  "alpha": "1.000"
-                }
-              }
-            }],
-            "info": {"author": "xcode", "version": 1}
-          }
-          with open('AppifyWebiOS/Assets.xcassets/LaunchBackgroundColor.colorset/Contents.json', 'w') as f:
-              json.dump(contents, f, indent=2)
-          print(f'✅ LaunchBackgroundColor set to #{hex_color} ({r:.3f}, {g:.3f}, {b:.3f})')
-          PYEOF
-
-      - name: Generate Fullscreen Splash Image
-        run: |
-          SPLASH_URL="${{ github.event.client_payload.splash_url || github.event.inputs.splash_url }}"
-          LOGO_URL="${{ github.event.client_payload.logo_url || github.event.inputs.logo_url }}"
-          SEC_COLOR="${{ github.event.client_payload.secondary_color || github.event.inputs.secondary_color || '#FFFFFF' }}"
-          ASSET_DIR="AppifyWebiOS/Assets.xcassets/LaunchSplash.imageset"
-
-          # Prefer splash_url, fall back to logo_url for the source image
-          IMG_URL="${SPLASH_URL:-$LOGO_URL}"
-
-          if [ -z "$IMG_URL" ]; then
-            echo "⚠️ No splash or logo URL — LaunchScreen will use background color only"
-            exit 0
-          fi
-
-          echo "Downloading source image from: ${IMG_URL}"
-          if ! curl -L -f -o /tmp/splash_source_raw "${IMG_URL}" 2>/dev/null; then
-            echo "⚠️ Failed to download image"
-            exit 0
-          fi
-
-          pip3 install --quiet Pillow 2>/dev/null || \
-            pip3 install --quiet --break-system-packages Pillow 2>/dev/null || true
-
-          python3 - <<PYEOF
-          import sys, os
-          try:
-              from PIL import Image, ImageDraw
-          except ImportError:
-              print("Pillow not available — skipping splash generation")
-              sys.exit(0)
-
-          # Canvas size: iPhone Pro Max @3x
-          W, H = 1242, 2688
-          ASSET_DIR = "${ASSET_DIR}"
-
-          # Parse background color
-          hex_color = "${SEC_COLOR}".strip().lstrip('#')
-          if len(hex_color) == 3:
-              hex_color = ''.join(c*2 for c in hex_color)
-          try:
-              r = int(hex_color[0:2], 16)
-              g = int(hex_color[2:4], 16)
-              b = int(hex_color[4:6], 16)
-              bg = (r, g, b, 255)
-          except Exception:
-              bg = (255, 255, 255, 255)
-
-          # Create full-screen canvas with brand background
-          canvas = Image.new("RGBA", (W, H), bg)
-
-          # Load and place the source image
-          src = Image.open("/tmp/splash_source_raw").convert("RGBA")
-
-          # If source image is already large enough to fill (e.g. a proper splash),
-          # scale it to fill the canvas.
-          src_w, src_h = src.size
-          if src_w >= W * 0.8 and src_h >= H * 0.8:
-              # Scale to fill
-              scale = max(W / src_w, H / src_h)
-              new_w = int(src_w * scale)
-              new_h = int(src_h * scale)
-              src = src.resize((new_w, new_h), Image.LANCZOS)
-              x = (W - new_w) // 2
-              y = (H - new_h) // 2
-              canvas.paste(src, (x, y), src)
-          else:
-              # Source is a small logo — center it at 40% of screen width
-              logo_size = int(W * 0.40)
-              src.thumbnail((logo_size, logo_size), Image.LANCZOS)
-              lw, lh = src.size
-              x = (W - lw) // 2
-              y = (H - lh) // 2
-              canvas.paste(src, (x, y), src)
-
-          canvas.convert("RGB").save(os.path.join(ASSET_DIR, "launch_splash.png"))
-          print(f"✅ Fullscreen splash generated: {W}x{H} with background #{hex_color}")
-          PYEOF
-
-      - name: Set App Icon from Logo URL
-        run: |
-          LOGO_URL="${{ github.event.client_payload.logo_url || github.event.inputs.logo_url }}"
-          ICON_DIR="AppifyWebiOS/Assets.xcassets/AppIcon.appiconset"
-
-          if [ -z "$LOGO_URL" ]; then
-            echo "⚠️ No logo URL provided — app will use default icon"
-            exit 0
-          fi
-
-          echo "Downloading logo from: ${LOGO_URL}"
-          if ! curl -L -f -o /tmp/app_logo_raw "${LOGO_URL}" 2>/dev/null; then
-            echo "⚠️ Failed to download logo — using default icon"
-            exit 0
-          fi
-
-          echo "Generating iOS icon sizes from logo..."
-
-          # Use Python + Pillow (reliable cross-version image resize)
-          pip3 install --quiet Pillow 2>/dev/null || \
-            pip3 install --quiet --break-system-packages Pillow 2>/dev/null || true
-
-          python3 - << 'PYEOF'
-          import sys, os
-          try:
-              from PIL import Image
-          except ImportError:
-              print("Pillow not available - skipping icon generation")
-              sys.exit(0)
-          logo = Image.open("/tmp/app_logo_raw").convert("RGBA")
-          icon_dir = "AppifyWebiOS/Assets.xcassets/AppIcon.appiconset"
-          sizes = [
-              ("icon-40.png", 40), ("icon-58.png", 58), ("icon-60.png", 60),
-              ("icon-80.png", 80), ("icon-87.png", 87), ("icon-120.png", 120),
-              ("icon-180.png", 180), ("icon-1024.png", 1024),
-          ]
-          for name, size in sizes:
-              canvas = Image.new("RGBA", (size, size), (255, 255, 255, 255))
-              thumb = logo.copy()
-              thumb.thumbnail((size, size), Image.LANCZOS)
-              x = (size - thumb.width) // 2
-              y = (size - thumb.height) // 2
-              canvas.paste(thumb, (x, y), thumb)
-              canvas.convert("RGB").save(os.path.join(icon_dir, name))
-              print("  done: " + name)
-          print("App icon set from logo")
-          PYEOF
-
-      - name: Generate Xcode Project
-        run: |
-          xcodegen generate
-          echo "✅ Xcode project generated"
-
-      - name: Build iOS App
-        run: |
-          xcodebuild build \
-            -project AppifyWebiOS.xcodeproj \
-            -scheme AppifyWebiOS \
-            -destination 'generic/platform=iOS' \
-            -configuration Release \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
-
-      - name: Package as IPA
-        run: |
-          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "AppifyWebiOS.app" | head -n 1)
-
-          if [ -z "$APP_PATH" ]; then
-            APP_PATH=$(find . -name "AppifyWebiOS.app" | head -n 1)
-          fi
-
-          if [ -z "$APP_PATH" ]; then
-            echo "⚠️ Could not find built .app bundle"
-            mkdir -p Payload
-            touch Payload/AppifyWeb.app
-            zip -r app-release.ipa Payload
-          else
-            echo "Packing $APP_PATH into IPA..."
-            mkdir -p Payload
-            cp -r "$APP_PATH" Payload/
-            zip -r app-release.ipa Payload
-          fi
-
-      - name: Upload IPA to Artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          name: ios-app-${{ github.event.client_payload.app_id }}
-          path: app-release.ipa
-
-      - name: Notify Backend
+          node-version: '22'
+      - name: Verify bridge and configuration rules
+        run: node --test scripts/bridge.test.cjs scripts/config.test.mjs scripts/location.test.cjs
+      - name: Configure from backend payload
+        run: node scripts/prepare-build.mjs
+      - name: Prepare exact wizard branding
         run: |
-          APP_ID="${{ github.event.client_payload.app_id || github.event.inputs.app_id }}"
-          BUILD_ID="${{ github.event.client_payload.build_id || github.event.inputs.build_id }}"
-          API_URL="${{ github.event.client_payload.api_url || github.event.inputs.api_url || 'https://www.appifyweb24.com/backend/index.php/' }}"
-
-          IPA_PATH="app-release.ipa"
-          FILE_SIZE=$(stat -f%z "$IPA_PATH" 2>/dev/null || echo "0")
-
-          echo "Uploading IPA to platform..."
-          curl -v -X POST "${API_URL}v1/app/${APP_ID}/build/${BUILD_ID}/webhook" \
-            -F "status=completed" \
-            -F "file_size=${FILE_SIZE}" \
-            -F "build_file=@${IPA_PATH}" \
-            || echo "Warning: Failed to notify platform"
+          python3 -m venv .build-tools
+          .build-tools/bin/pip install Pillow
+          .build-tools/bin/python scripts/prepare_assets.py
+      - name: Optional Firebase configuration
+        env:
+          GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
+        run: |
+          if [ -n "$GOOGLE_SERVICE_INFO_PLIST_BASE64" ]; then
+            printf '%s' "$GOOGLE_SERVICE_INFO_PLIST_BASE64" | base64 --decode > AppifyWebiOS/GoogleService-Info.plist
+            plutil -lint AppifyWebiOS/GoogleService-Info.plist
+          fi
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Build unsigned app
+        run: |
+          xcodebuild build -project AppifyWebiOS.xcodeproj -scheme AppifyWebiOS -destination 'generic/platform=iOS' -configuration Release -derivedDataPath DerivedData CODE_SIGN_IDENTITY='' CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+      - name: Package actual app bundle
+        run: |
+          APP_PATH='DerivedData/Build/Products/Release-iphoneos/AppifyWebiOS.app'
+          test -d "$APP_PATH"
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qr app-unsigned.ipa Payload
+          printf '%s\n' 'Unsigned build artifact: sign with the matching Apple certificate and provisioning profile before device installation.' > SIGNING_REQUIRED.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned-app
+          path: |
+            app-unsigned.ipa
+            SIGNING_REQUIRED.txt
+          if-no-files-found: error
+      - name: Report build artifact to backend
+        run: node scripts/report-build.mjs

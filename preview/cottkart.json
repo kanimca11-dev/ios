@@ -1,0 +1,17 @@
+{
+  "app_name": "Cottkart",
+  "app_token": "default_token",
+  "package_name": "com.appifyweb.cottkart.preview",
+  "api_url": "https://appifyweb24.com/backend/index.php/",
+  "target_url": "https://cottkart.com/?app_webview=1",
+  "config": {
+    "logo_url": "https://appifyweb24.com/backend/uploads/logos/logo_164_1791519613.png",
+    "splash_url": "https://appifyweb24.com/backend/uploads/splash/splash_ai_164_1791519608.jpg",
+    "primary_color": "#008000",
+    "secondary_color": "#FFFFFF",
+    "enable_push": false,
+    "enable_biometrics": false,
+    "enable_location": false,
+    "show_bottom_nav": false
+  }
+}

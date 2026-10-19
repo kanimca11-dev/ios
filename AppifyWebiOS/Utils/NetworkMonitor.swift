@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import Network
 
 /// Real-time network connectivity monitor — mirrors Android's NetworkUtils.kt

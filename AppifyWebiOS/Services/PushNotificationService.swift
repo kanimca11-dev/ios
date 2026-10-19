@@ -1,82 +1,117 @@
 import UIKit
+import Combine
 import UserNotifications
+#if canImport(FirebaseCore)
+import FirebaseCore
+import FirebaseMessaging
+#endif
 
-/// APNs push notification registration and deep-link handling.
-/// Mirrors Android's MyFirebaseMessagingService.kt
-/// Note: For full FCM support add the Firebase iOS SDK via SPM and uncomment the Firebase lines.
+/// Backend uses FCM device tokens, never raw APNs tokens.
 final class PushNotificationService: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
     static let shared = PushNotificationService()
-
-    /// URL to open when a push notification is tapped (observed by ContentView)
-    @Published var pendingDeepLinkUrl: String? = nil
-
+    @Published var pendingDeepLinkUrl: String?
+    private(set) var token: String?
+    private var enabled = false
+    private let updates: OperationQueue = { let queue = OperationQueue(); queue.maxConcurrentOperationCount = 1; return queue }()
+    private var identity: [String: Any] = [:]
+    var hasIdentity: Bool { !(identity["user_id"] as? String ?? "").isEmpty }
     private override init() { super.init() }
-
-    // MARK: - Registration
-
-    func requestPermission() {
-        let center = UNUserNotificationCenter.current()
-        center.delegate = self
-        center.requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if granted {
-                DispatchQueue.main.async {
-                    UIApplication.shared.registerForRemoteNotifications()
+    func prepare() {
+        UNUserNotificationCenter.current().delegate = self
+        // Remove the legacy copy of all localStorage (may contain credentials).
+        UserDefaults.standard.removeObject(forKey: "webview_local_storage")
+    }
+    func setEnabled(_ value: Bool) {
+        enabled = value
+        #if canImport(FirebaseCore)
+        if value, FirebaseApp.app() == nil, Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
+            FirebaseApp.configure()
+            Messaging.messaging().delegate = self
+        }
+        if FirebaseApp.app() != nil { Messaging.messaging().isAutoInitEnabled = value }
+        #endif
+        if value {
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                if settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional {
+                    DispatchQueue.main.async { if self.enabled { UIApplication.shared.registerForRemoteNotifications() } }
                 }
             }
+        } else { updates.cancelAllOperations(); UIApplication.shared.unregisterForRemoteNotifications() }
+    }
+    func requestPermission() {
+        guard enabled else { return }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
+            if granted { DispatchQueue.main.async { if self.enabled { UIApplication.shared.registerForRemoteNotifications() } } }
         }
     }
-
-    /// Call from AppDelegate / scene delegate after receiving APNs token
     func didRegister(deviceToken: Data) {
-        let tokenStr = deviceToken.map { String(format: "%02x", $0) }.joined()
-        print("[Push] APNs device token: \(tokenStr)")
-
-        // If using Firebase:
-        // Messaging.messaging().apnsToken = deviceToken
-
-        syncTokenToBackend(tokenStr)
-    }
-
-    // MARK: - UNUserNotificationCenterDelegate
-
-    /// Foreground notification display
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                 willPresent notification: UNNotification,
-                                 withCompletionHandler completion: @escaping (UNNotificationPresentationOptions) -> Void) {
-        completion([.banner, .badge, .sound])
-    }
-
-    /// Tap on notification
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                 didReceive response: UNNotificationResponse,
-                                 withCompletionHandler completion: @escaping () -> Void) {
-        let userInfo = response.notification.request.content.userInfo
-        if let url = userInfo["url"] as? String ?? userInfo["push_url"] as? String {
-            DispatchQueue.main.async {
-                self.pendingDeepLinkUrl = url
-            }
+        guard enabled else { return }
+        #if canImport(FirebaseCore)
+        guard FirebaseApp.app() != nil else { return }
+        Messaging.messaging().apnsToken = deviceToken
+        Messaging.messaging().token { [weak self] token, _ in
+            DispatchQueue.main.async { self?.receiveToken(token) }
         }
-        completion()
+        #endif
     }
-
-    // MARK: - Backend token sync (mirrors Android MyFirebaseMessagingService)
-
-    private func syncTokenToBackend(_ token: String) {
-        let apiBase = Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String
-                      ?? "https://www.appifyweb24.com/backend/index.php"
-        let appToken = Bundle.main.object(forInfoDictionaryKey: "APP_TOKEN") as? String
-                      ?? "default_token"
-
-        guard let url = URL(string: "\(apiBase)/v1/push/register") else { return }
-
+    func receiveToken(_ value: String?) {
+        guard enabled, let value else { return }
+        token = value
+        sync()
+    }
+    func updateIdentity(_ payload: [String: Any]) {
+        identity["user_id"] = String(String(describing: payload["id"] ?? "").prefix(255))
+        identity["user_email"] = String((payload["email"] as? String ?? "").prefix(255))
+        identity["user_name"] = String((payload["name"] as? String ?? "").prefix(255))
+        sync()
+    }
+    func updateTags(_ values: [String]) { identity["user_tags"] = Array(values.prefix(50)).map { String($0.prefix(100)) }; sync() }
+    func clearIdentity() {
+        identity.removeAll()
+        guard let token else { return }
+        post("push/identity", method: "PUT", body: ["device_token": token, "clear": true])
+    }
+    private func sync() {
+        guard let token else { return }
+        var body = identity
+        body["device_token"] = token; body["platform"] = "ios"
+        post("push/register", method: "POST", body: body)
+        if !hasIdentity { post("push/identity", method: "PUT", body: ["device_token": token, "clear": true]) }
+    }
+    private func post(_ path: String, method: String, body: [String: Any]) {
+        guard enabled, ApiService.appToken != "default_token", !ApiService.appToken.isEmpty, let url = ApiService.endpoint(path) else { return }
         var request = URLRequest(url: url, timeoutInterval: 10)
-        request.httpMethod = "POST"
+        request.httpMethod = method
+        request.setValue(ApiService.appToken, forHTTPHeaderField: "X-App-Token")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(appToken)", forHTTPHeaderField: "Authorization")
-
-        let body: [String: Any] = ["token": token, "platform": "ios"]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-        URLSession.shared.dataTask(with: request).resume()
+        // Serialize identity updates so a late login request cannot undo a logout clear.
+        let outbound = request
+        updates.addOperation {
+            let finished = DispatchSemaphore(value: 0)
+            let task = ApiService.session.dataTask(with: outbound) { _, _, _ in finished.signal() }
+            task.resume()
+            if finished.wait(timeout: .now() + 12) == .timedOut { task.cancel() }
+        }
+    }
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler(enabled ? [.banner, .badge, .sound] : [])
+    }
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        let info = response.notification.request.content.userInfo
+        if let url = info["url"] as? String ?? info["push_url"] as? String {
+            DispatchQueue.main.async { if self.enabled { self.pendingDeepLinkUrl = url } }
+        }
+        completionHandler()
     }
 }
+
+#if canImport(FirebaseCore)
+extension PushNotificationService: MessagingDelegate {
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        DispatchQueue.main.async { self.receiveToken(fcmToken) }
+    }
+}
+#endif

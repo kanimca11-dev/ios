@@ -1,106 +1,63 @@
 import Foundation
+import Combine
 
-class ApiService: ObservableObject {
-    @Published var appConfig: AppConfig?
-    @Published var isLoading = true
-    @Published var error: String?
-
-    // Read from Info.plist (injected via XcodeGen / build settings)
-    private var baseUrl: String {
-        Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String
-            ?? "https://www.appifyweb24.com/backend/index.php"
-    }
-    private var appToken: String {
-        Bundle.main.object(forInfoDictionaryKey: "APP_TOKEN") as? String
-            ?? "default_token"
-    }
-
-    private let cacheKey     = "cached_app_config"
-    private let cacheTimeKey = "cached_app_config_time"
-    private let cacheTTL: TimeInterval = 86_400  // 24 hours
-
-    // MARK: - Public
-
-    func fetchConfig() {
-        isLoading = true
-        error = nil
-
-        guard let url = URL(string: "\(baseUrl)/config") else {
-            loadFromCacheOrFail("Invalid API URL")
-            return
-        }
-
-        var request = URLRequest(url: url, timeoutInterval: 15)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(appToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(appToken,             forHTTPHeaderField: "X-App-Token")
-        request.setValue("application/json",   forHTTPHeaderField: "Accept")
-
-        URLSession.shared.dataTask(with: request) { [weak self] data, _, err in
-            DispatchQueue.main.async {
-                self?.isLoading = false
-
-                if let err = err {
-                    self?.loadFromCacheOrFail(err.localizedDescription)
-                    return
-                }
-                guard let data = data else {
-                    self?.loadFromCacheOrFail("No data received")
-                    return
-                }
-
-                do {
-                    let decoder = JSONDecoder()
-                    let config = try decoder.decode(AppConfig.self, from: data)
-                    self?.appConfig = config
-                    self?.persistConfig(data)
-                    // Persist brand colors for instant display on next cold start
-                    self?.persistColors(primary: config.primaryColor, secondary: config.secondaryColor)
-                } catch {
-                    self?.loadFromCacheOrFail("Config decode error: \(error.localizedDescription)")
-                }
-            }
-        }.resume()
-    }
-
-    // MARK: - Cache helpers
-
-    private func loadFromCacheOrFail(_ msg: String) {
-        if let cached = loadCachedConfig() {
-            appConfig = cached
-        } else {
-            error = msg
-        }
-    }
-
-    private func persistConfig(_ data: Data) {
-        UserDefaults.standard.set(data,  forKey: cacheKey)
-        UserDefaults.standard.set(Date(), forKey: cacheTimeKey)
-    }
-
-    private func loadCachedConfig() -> AppConfig? {
-        guard
-            let savedDate = UserDefaults.standard.object(forKey: cacheTimeKey) as? Date,
-            Date().timeIntervalSince(savedDate) < cacheTTL,
-            let data = UserDefaults.standard.data(forKey: cacheKey)
-        else { return nil }
-
-        let decoder = JSONDecoder()
-        return try? decoder.decode(AppConfig.self, from: data)
-    }
-
-    // MARK: - Brand color persistence (instant colors before API returns)
-
-    func persistColors(primary: String, secondary: String) {
-        UserDefaults.standard.set(primary,   forKey: "brand_primary_color")
-        UserDefaults.standard.set(secondary, forKey: "brand_secondary_color")
-    }
-
-    static func cachedPrimaryColor() -> String {
-        UserDefaults.standard.string(forKey: "brand_primary_color")   ?? "#0F9B9B"
-    }
-    static func cachedSecondaryColor() -> String {
-        UserDefaults.standard.string(forKey: "brand_secondary_color") ?? "#FFFFFF"
+/// Cached/local settings are available before the first frame; API refresh is background work.
+private final class SameOriginRedirects: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        guard let original = task.originalRequest?.url, let destination = request.url,
+              NavigationPolicy(original.absoluteString).isInternal(destination) else { completionHandler(nil); return }
+        completionHandler(request)
     }
 }
 
+final class ApiService: ObservableObject {
+    static let session = URLSession(configuration: .ephemeral, delegate: SameOriginRedirects(), delegateQueue: nil)
+    @Published private(set) var appConfig: AppConfig
+    @Published private(set) var isLoading = false
+    @Published private(set) var error: String?
+    private var task: URLSessionDataTask?
+    static let cacheKey = "native_shell_config_v2"
+    static var appToken: String { Bundle.main.object(forInfoDictionaryKey: "APP_TOKEN") as? String ?? "default_token" }
+    static var baseURL: URL? {
+        let value = Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String ?? ""
+        guard let url = URL(string: value), NavigationPolicy.validHTTPS(url) else { return nil }
+        return url
+    }
+    static func endpoint(_ path: String) -> URL? {
+        guard let base = baseURL else { return nil }
+        return URL(string: base.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/v1/" + path)
+    }
+    init() {
+        let cached = UserDefaults.standard.data(forKey: Self.cacheKey).flatMap { try? JSONDecoder().decode(AppConfig.self, from: $0) }
+        let bundled = Bundle.main.url(forResource: "bundled-config", withExtension: "json")
+            .flatMap { try? Data(contentsOf: $0) }.flatMap { try? JSONDecoder().decode(AppConfig.self, from: $0) }
+        // A cached disabled decision is retained even when offline; no expiry fallback re-enables it.
+        appConfig = cached ?? bundled ?? AppConfig(targetUrl: "")
+    }
+    func fetchConfig() {
+        guard task == nil else { return }
+        guard Self.appToken != "default_token", !Self.appToken.isEmpty, let url = Self.endpoint("config") else { return }
+        isLoading = true
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
+        request.setValue(Self.appToken, forHTTPHeaderField: "X-App-Token")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        task = Self.session.dataTask(with: request) { [weak self] data, response, failure in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.task = nil; self.isLoading = false
+                guard failure == nil, let response = response as? HTTPURLResponse,
+                      (200...299).contains(response.statusCode), let data,
+                      let config = try? JSONDecoder().decode(AppConfig.self, from: data),
+                      (NavigationPolicy(config.targetUrl).base != nil || !config.isActive || !config.isSubscriptionActive) else {
+                    self.error = "App settings could not be refreshed. Using saved settings."
+                    return
+                }
+                self.error = nil
+                self.appConfig = config
+                UserDefaults.standard.set(try? JSONEncoder().encode(config), forKey: Self.cacheKey)
+            }
+        }
+        task?.resume()
+    }
+}

@@ -1,0 +1,10 @@
+/.tools/
+/.build-config.json
+/.build-tools/
+/artifacts/
+/DerivedData/
+/Payload/
+/*.ipa
+/*.xcodeproj/
+AppifyWebiOS/Info.plist
+AppifyWebiOS/GoogleService-Info.plist

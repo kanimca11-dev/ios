@@ -1,33 +1,14 @@
 import SwiftUI
 
-/// Static full-screen splash shown while the WebView is loading.
+/// Exact visual continuation of the static OS launch screen, without a second design/animation.
+/// iOS owns the real launch screen; it cannot be retained by application code.
 struct SplashView: View {
-    let splashImage: UIImage?
-    let primaryColor: Color
-    let logoImage: UIImage?
-
     var body: some View {
-        if let splash = splashImage {
-            // ── Full-screen splash (downloaded from config) ───────────────────
-            Image(uiImage: splash)
-                .resizable()
-                .scaledToFill()
-                .ignoresSafeArea()
-        } else {
-            // ── First-launch fallback: brand color background ─────────────────
-            primaryColor
-                .ignoresSafeArea()
-                .overlay(
-                    Group {
-                        if let logo = logoImage {
-                            Image(uiImage: logo)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 160, height: 160)
-                                .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-                        }
-                    }
-                )
+        ZStack {
+            Color("LaunchBackgroundColor").ignoresSafeArea()
+            Image("LaunchLogo").resizable().scaledToFit().frame(width: 128, height: 128)
         }
+        .allowsHitTesting(true)
+        .accessibilityLabel("Opening app")
     }
 }

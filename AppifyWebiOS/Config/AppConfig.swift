@@ -2,6 +2,8 @@ import Foundation
 import SwiftUI
 
 struct AppConfig: Codable, Equatable {
+    var startUrl: String?
+    var appModeEnabled: Bool = false
     var targetUrl: String
     var primaryColor: String
     var secondaryColor: String
@@ -17,8 +19,20 @@ struct AppConfig: Codable, Equatable {
     var uiPrimaryColor: Color   { Color(hex: primaryColor)   }
     var uiSecondaryColor: Color { Color(hex: secondaryColor) }
 
+    init(targetUrl: String) {
+        self.targetUrl = targetUrl
+        primaryColor = "#008000"
+        secondaryColor = "#FFFFFF"
+        subscriptionExpiredMessage = "Subscription expired."
+        isActive = true
+        isSubscriptionActive = true
+        features = AppFeatures()
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        startUrl = try c.decodeIfPresent(String.self, forKey: .startUrl)
+        appModeEnabled = try c.decodeIfPresent(Bool.self, forKey: .appModeEnabled) ?? false
         targetUrl                  = try c.decode(String.self, forKey: .targetUrl)
         primaryColor               = try c.decodeIfPresent(String.self, forKey: .primaryColor)               ?? "#0F9B9B"
         secondaryColor             = try c.decodeIfPresent(String.self, forKey: .secondaryColor)             ?? "#FFFFFF"

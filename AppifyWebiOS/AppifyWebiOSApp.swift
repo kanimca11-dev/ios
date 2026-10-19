@@ -1,398 +1,167 @@
 import SwiftUI
-
-// MARK: - App Entry
+import UIKit
 
 @main
 struct AppifyWebiOSApp: App {
-    @StateObject private var apiService = ApiService()
+    @StateObject private var api = ApiService()
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-
     var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(apiService)
-                .onAppear { apiService.fetchConfig() }
-        }
+        WindowGroup { ContentView().environmentObject(api) }
     }
 }
 
-// MARK: - App Delegate (APNs)
-
-class AppDelegate: NSObject, UIApplicationDelegate {
-    func application(_ app: UIApplication,
-                     didRegisterForRemoteNotificationsWithDeviceToken token: Data) {
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        PushNotificationService.shared.prepare()
+        return true
+    }
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken token: Data) {
         PushNotificationService.shared.didRegister(deviceToken: token)
     }
-    func application(_ app: UIApplication,
-                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        print("[Push] APNs registration failed: \(error.localizedDescription)")
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {}
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        AppOrientation.mask
     }
 }
 
-// MARK: - Root Content View
+enum AppOrientation {
+    static var mask: UIInterfaceOrientationMask = .portrait
+    static func apply(_ value: String) {
+        mask = value == "landscape" ? .landscape : value == "auto" ? .all : .portrait
+        if #available(iOS 16.0, *), let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask))
+        }
+    }
+}
 
+@MainActor
 struct ContentView: View {
-    @EnvironmentObject var apiService: ApiService
-    @StateObject private var nav = NavigationState()
+    @EnvironmentObject private var api: ApiService
+    @StateObject private var store = ShellStore()
     @ObservedObject private var network = NetworkMonitor.shared
-    @ObservedObject private var pushService = PushNotificationService.shared
-
-    // Brand colors — loaded from cache instantly so no flash on cold start
-    @State private var primaryColor   = Color(hex: ApiService.cachedPrimaryColor())
-    @State private var secondaryColor = Color(hex: ApiService.cachedSecondaryColor())
-
-    // Splash logo cached on disk
-    @State private var logoImage: UIImage?   = AssetCache.shared.cachedLogo()
-    // Full-screen splash image cached on disk
-    @State private var splashImage: UIImage? = AssetCache.shared.cachedSplash()
-
-    // Splash overlay stays until WebView fires onFirstPageLoaded (didFinish)
-    @State private var showSplash = true
-
-    // Biometric gate
-    @State private var isUnlocked = false
-
-    // Nav auto-hide
-    @State private var navVisible = true
-    @State private var navHideTask: DispatchWorkItem?
-
-    // Full-screen on scroll down
-    @State private var hideStatusBar = false
-
+    @ObservedObject private var push = PushNotificationService.shared
+    @Environment(\.scenePhase) private var phase
+    @State private var offerPush = false
     var body: some View {
+        let config = api.appConfig
         ZStack {
-            mainContent
-            splashOverlay
-        }
-        .statusBarHidden(hideStatusBar)
-        // Push notification deep-link: when user taps a notification, navigate WebView
-        .onChange(of: pushService.pendingDeepLinkUrl) { url in
-            guard let url else { return }
-            nav.navigateTo = url
-            pushService.pendingDeepLinkUrl = nil
-        }
-        // Scroll direction from JS bridge
-        .onReceive(NotificationCenter.default.publisher(for: .webViewJSMessage)) { note in
-            guard let msg = note.userInfo?["message"] as? String else { return }
-            switch msg {
-            case "scroll_down":
-                withAnimation(.easeInOut(duration: 0.3)) { hideStatusBar = true }
-            case "scroll_up":
-                withAnimation(.easeInOut(duration: 0.3)) { hideStatusBar = false }
-                showNav()
-            case "scroll":
-                showNav()
-            default: break
-            }
-        }
-        .onChange(of: apiService.appConfig) { cfg in
-            guard let cfg else { return }
-            primaryColor   = cfg.uiPrimaryColor
-            secondaryColor = cfg.uiSecondaryColor
-
-            // Cache logo to disk in background
-            if let logoUrl = cfg.splashLogoUrl {
-                AssetCache.shared.cacheLogo(from: logoUrl) { img in
-                    if let img { logoImage = img }
-                }
-            }
-            // Cache full-screen splash image to disk in background
-            if let splashUrl = cfg.splashImageUrl {
-                AssetCache.shared.cacheSplash(from: splashUrl) { img in
-                    if let img { splashImage = img }
-                }
-            }
-            // Push notifications
-            if cfg.features.enablePushNotifications {
-                PushNotificationService.shared.requestPermission()
-            }
-            // Screen orientation
-            applyOrientation(cfg.features.screenOrientation)
-
-            // If app or subscription not active, drop splash immediately
-            if !cfg.isActive || !cfg.isSubscriptionActive {
-                withAnimation { showSplash = false }
-            }
-        }
-    }
-
-    // MARK: - Main Content
-
-    @ViewBuilder
-    private var mainContent: some View {
-        if !network.isConnected && apiService.appConfig == nil {
-            offlineView
-        } else if let config = apiService.appConfig {
+            config.uiSecondaryColor.ignoresSafeArea()
             if !config.isActive || !config.isSubscriptionActive {
-                SubscriptionExpiredView(
-                    message: config.subscriptionExpiredMessage,
-                    primaryColor: primaryColor,
-                    onRetry: { apiService.fetchConfig() }
-                )
-            } else if config.features.enableBiometrics && !isUnlocked {
-                BiometricLockView(primaryColor: primaryColor) {
-                    withAnimation { isUnlocked = true }
-                }
-            } else {
-                appShell(config: config)
+                SubscriptionExpiredView(message: config.subscriptionExpiredMessage, primaryColor: config.uiPrimaryColor, onRetry: { api.fetchConfig() })
+            } else if config.features.enableBiometrics && !store.unlocked {
+                BiometricLockView(primaryColor: config.uiPrimaryColor) { store.didUnlock() }
+            } else if NavigationPolicy(config.targetUrl).base == nil {
+                message("Configure a valid HTTPS website and rebuild this app.", retry: { api.fetchConfig() })
+            } else if let session = store.active {
+                SessionScreen(session: session, store: store, config: config, online: network.isConnected, offerPush: $offerPush)
+                    .allowsHitTesting(store.launchFinished)
             }
-        } else if let error = apiService.error {
-            errorView(message: error)
-        } else {
-            // Still loading on first launch — splash overlay covers this
-            Color.black.ignoresSafeArea()
-        }
-    }
-
-    // MARK: - App Shell (WebView + optional floating nav pill)
-
-    private func appShell(config: AppConfig) -> some View {
-        let showNav = config.features.showBottomNav && !shouldHideNav(config: config)
-
-        return WebView(
-            url: URL(string: config.targetUrl)!,
-            navigationState: nav,
-            userAgentSuffix: config.userAgentSuffix,
-            onFirstPageLoaded: {
-                withAnimation(.easeOut(duration: 0.5)) {
-                    showSplash = false
-                }
-            }
-        )
-        .ignoresSafeArea(edges: .bottom)
-        .background(secondaryColor.ignoresSafeArea(edges: .top))
-        .overlay(alignment: .bottom) {
-            if showNav {
-                bottomNavBar(config: config)
-                    .opacity(navVisible ? 1 : 0)
-                    .offset(y: navVisible ? 0 : 20)
-                    .animation(.easeInOut(duration: 0.3), value: navVisible)
+            if !store.launchFinished && config.isActive && config.isSubscriptionActive && (!config.features.enableBiometrics || store.unlocked) && NavigationPolicy(config.targetUrl).base != nil {
+                SplashView().ignoresSafeArea()
             }
         }
-        .onAppear { scheduleNavHide() }
-    }
-
-    // MARK: - Bottom Navigation Bar
-    private func bottomNavBar(config: AppConfig) -> some View {
-        HStack(spacing: 0) {
-            ForEach(config.features.navigationTabs) { tab in
-                let isActive = !tab.path.isEmpty && nav.currentUrl.contains(tab.path)
-
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-
-                    let dest: String
-                    if tab.path.hasPrefix("http") {
-                        dest = tab.path
-                    } else {
-                        let base = config.targetUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                        let path = tab.path.hasPrefix("/") ? tab.path : "/\(tab.path)"
-                        dest = base + path
-                    }
-                    nav.navigateTo = dest
-
-                } label: {
-                    VStack(spacing: 4) { // 👈 reduced
-
-                        Image(systemName: sfSymbol(for: tab.icon))
-                            .font(.system(size: 16, weight: isActive ? .semibold : .regular))
-                            .symbolVariant(isActive ? .fill : .none)
-                            .foregroundColor(isActive ? secondaryColor : secondaryColor.opacity(0.35))
-                            .scaleEffect(isActive ? 1.05 : 1.0)
-                            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
-
-                        Circle()
-                            .fill(secondaryColor)
-                            .frame(width: 4, height: 4)
-                            .opacity(isActive ? 1 : 0)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 32)
-                }
-            }
+        .onAppear { apply(config); api.fetchConfig() }
+        .onChange(of: api.appConfig) { apply($0) }
+        .onChange(of: phase) { state in
+            if state == .background { store.background(); store.rememberSelection() }
+            if state == .active { store.foreground(); api.fetchConfig() }
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 14)
-        .padding(.bottom, (UIApplication.shared.connectedScenes.first as? UIWindowScene)?
-            .windows.first?.safeAreaInsets.bottom ?? 0)
-        .background(
-            ZStack {
-                Capsule().fill(.ultraThinMaterial)
-                Capsule().fill(Color.white.opacity(0.65))
-            }
-        )
-        .overlay(
-            Capsule()
-                .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
-        )
-        .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 3)
-        .padding(.horizontal, 52)
-        .padding(.bottom, 6)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: nav.currentUrl)
-    }
-
-    // MARK: - Splash Overlay
-    @ViewBuilder
-    private var splashOverlay: some View {
-        if showSplash {
-            SplashView(
-                splashImage:  splashImage,
-                primaryColor: primaryColor,
-                logoImage:    logoImage
-            )
-            .ignoresSafeArea()
-            .transition(.opacity)
+        .onChange(of: network.isConnected) { connected in
+            if connected { api.fetchConfig(); if store.active?.error != nil { store.active?.reload() } }
         }
-    }
-
-    // MARK: - Offline / Error views
-
-    private var offlineView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "wifi.slash")
-                .font(.system(size: 52))
-                .foregroundColor(.gray)
-            Text("No Connection")
-                .font(.title2.bold())
-            Text("Please check your internet connection and try again.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            Button("Retry") { apiService.fetchConfig() }
-                .buttonStyle(.borderedProminent)
-                .tint(primaryColor)
+        .onChange(of: push.pendingDeepLinkUrl) { raw in
+            guard let raw, let url = URL(string: raw), NavigationPolicy(config.targetUrl).isInternal(url) else { push.pendingDeepLinkUrl = nil; return }
+            store.navigate(raw); push.pendingDeepLinkUrl = nil
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(UIColor.systemBackground).ignoresSafeArea())
-    }
-
-    private func errorView(message: String) -> some View {
-        VStack(spacing: 20) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 52))
-                .foregroundColor(.orange)
-            Text("Something went wrong")
-                .font(.title2.bold())
-            Text(message)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            Button("Retry") { apiService.fetchConfig() }
-                .buttonStyle(.borderedProminent)
-                .tint(primaryColor)
+        .onOpenURL { url in
+            if NavigationPolicy(config.targetUrl).isInternal(url) { store.navigate(url.absoluteString) }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(UIColor.systemBackground).ignoresSafeArea())
-    }
-
-    // MARK: - Nav auto-hide helpers
-
-    private func showNav() {
-        withAnimation(.easeInOut(duration: 0.25)) { navVisible = true }
-        scheduleNavHide()
-    }
-
-    private func scheduleNavHide() {
-        navHideTask?.cancel()
-        let task = DispatchWorkItem {
-            withAnimation(.easeInOut(duration: 0.4)) { navVisible = false }
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+            if let url = activity.webpageURL, NavigationPolicy(config.targetUrl).isInternal(url) { store.navigate(url.absoluteString) }
         }
-        navHideTask = task
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: task)
+        .alert("Stay up to date", isPresented: $offerPush) {
+            Button("Allow") { UserDefaults.standard.set(true, forKey: "notification_prompted"); push.requestPermission() }
+            Button("Later", role: .cancel) { UserDefaults.standard.set(true, forKey: "notification_prompted") }
+        } message: { Text("Allow notifications for important updates from this app?") }
     }
-
-    // MARK: - Helpers
-
-    private func shouldHideNav(config: AppConfig) -> Bool {
-        config.features.hiddenNavPaths.contains { nav.currentUrl.contains($0) }
+    private func apply(_ config: AppConfig) {
+        store.update(config)
+        push.setEnabled(config.features.enablePushNotifications && config.isActive && config.isSubscriptionActive)
+        AppOrientation.apply(config.features.screenOrientation)
     }
-
-    private func sfSymbol(for icon: String) -> String {
-        switch icon.lowercased() {
-        // Home / navigation
-        case "home", "house":                          return "house"
-        case "menu", "hamburger":                      return "line.3.horizontal"
-        case "back":                                   return "chevron.left"
-        // Shopping
-        case "shopping_cart", "cart", "bag":           return "cart"
-        case "store", "shop", "storefront":            return "storefront"
-        case "orders", "order":                        return "bag"
-        // People
-        case "person", "account", "profile", "user":  return "person"
-        case "persons", "people", "customers", "users","person_2","group": return "person.2"
-        // Settings / tools
-        case "settings", "setting", "gear":            return "gear"
-        case "tune", "filter", "sliders":              return "slider.horizontal.3"
-        // Content
-        case "favorite", "favorites", "heart", "like": return "heart"
-        case "star", "starred":                        return "star"
-        case "bookmark", "bookmarks":                  return "bookmark"
-        case "list", "list_alt":                       return "list.bullet"
-        case "grid", "grid_view", "category":          return "square.grid.2x2"
-        // Communication
-        case "mail", "email", "message":               return "envelope"
-        case "chat", "forum":                          return "bubble.left"
-        case "notifications", "notification", "bell":  return "bell"
-        case "phone", "call":                          return "phone"
-        // Analytics / data
-        case "dashboard", "analytics", "insights":     return "chart.bar"
-        case "chart", "bar_chart":                     return "chart.bar.xaxis"
-        case "trending_up", "trend":                   return "chart.line.uptrend.xyaxis"
-        // Planning / calendar
-        case "plan", "planning", "calendar", "event", "schedule": return "calendar"
-        case "task", "tasks", "checklist":             return "checklist"
-        case "clipboard":                              return "clipboard"
-        // Location
-        case "location", "map", "place", "pin":        return "map"
-        // Media
-        case "image", "photo", "gallery":              return "photo"
-        case "camera":                                 return "camera"
-        case "video":                                  return "video"
-        // Misc
-        case "search", "find":                         return "magnifyingglass"
-        case "info", "information":                    return "info.circle"
-        case "help", "question":                       return "questionmark.circle"
-        case "add", "plus":                            return "plus"
-        case "edit", "pencil":                         return "pencil"
-        case "delete", "trash":                        return "trash"
-        case "share":                                  return "square.and.arrow.up"
-        case "download":                               return "arrow.down.circle"
-        case "upload":                                 return "arrow.up.circle"
-        case "refresh", "sync":                        return "arrow.clockwise"
-        case "work", "business", "briefcase":          return "briefcase"
-        case "money", "attach_money", "payment", "wallet": return "dollarsign.circle"
-        case "inventory", "warehouse":                 return "shippingbox"
-        case "report", "reports":                      return "doc.text"
-        case "support", "headset":                     return "headphones"
-        case "loyalty", "rewards":                     return "gift"
-        case "tracking":                               return "location.circle"
-        default:                                       return "circle"
-        }
-    }
-
-    private func applyOrientation(_ orientation: String) {
-        // requestGeometryUpdate requires iOS 16+; on iOS 15 portrait is the default
-        guard #available(iOS 16.0, *) else { return }
-        let mask: UIInterfaceOrientationMask
-        switch orientation {
-        case "landscape": mask = .landscape
-        case "auto":      mask = .all
-        default:          mask = .portrait
-        }
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask))
+    private func message(_ text: String, retry: @escaping () -> Void) -> some View {
+        VStack(spacing: 16) { Text(text).multilineTextAlignment(.center); Button("Retry", action: retry).buttonStyle(.borderedProminent) }.padding()
     }
 }
 
-// MARK: - UIKit Blur Wrapper
-
-struct BlurView: UIViewRepresentable {
-    let style: UIBlurEffect.Style
-    func makeUIView(context: Context) -> UIVisualEffectView {
-        UIVisualEffectView(effect: UIBlurEffect(style: style))
+@MainActor
+private struct SessionScreen: View {
+    @ObservedObject var session: WebSession
+    @ObservedObject var store: ShellStore
+    let config: AppConfig
+    let online: Bool
+    @Binding var offerPush: Bool
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack(alignment: .top) {
+                WebView(session: session)
+                if session.loading && session.ready && session.error == nil {
+                    ProgressView(value: session.progress).tint(config.uiPrimaryColor)
+                }
+                if !session.ready && session.error == nil && store.launchFinished {
+                    config.uiSecondaryColor.overlay(ProgressView().tint(config.uiPrimaryColor))
+                }
+                if let error = session.error {
+                    config.uiSecondaryColor.overlay {
+                        VStack(spacing: 16) {
+                            Image(systemName: online ? "exclamationmark.triangle" : "wifi.slash").font(.largeTitle)
+                            Text(error).multilineTextAlignment(.center)
+                            Button("Retry") { session.reload() }.buttonStyle(.borderedProminent).tint(config.uiPrimaryColor)
+                        }.padding(24)
+                    }
+                }
+            }
+            if !online && session.ready { Text("You�re offline. Showing available content.").font(.caption).padding(8).frame(maxWidth: .infinity).background(.thinMaterial) }
+            if config.features.showBottomNav && !store.tabs.isEmpty && !config.features.hiddenNavPaths.contains(where: { !$0.isEmpty && NavigationPolicy.matches(session.currentURL, $0) }) {
+                HStack(spacing: 0) {
+                    ForEach(store.tabs) { tab in
+                        let selected = store.selected == tab.path
+                        Button {
+                            UISelectionFeedbackGenerator().selectionChanged()
+                            if selected { session.scrollToTop() } else { store.select(tab.path) }
+                        } label: {
+                            VStack(spacing: 4) { Image(systemName: symbol(tab.icon)); Text(tab.label).font(.caption).lineLimit(1) }
+                                .foregroundColor(selected ? config.uiPrimaryColor : .secondary)
+                                .frame(maxWidth: .infinity, minHeight: 52)
+                        }.accessibilityAddTraits(selected ? .isSelected : [])
+                    }
+                }.background(config.uiSecondaryColor)
+            }
+        }
+        .id(ObjectIdentifier(session))
+        .onChange(of: session.error) { if $0 != nil { store.finishLaunch() } }
+        .onChange(of: session.ready) { ready in
+            if ready {
+                store.finishLaunch()
+                if config.features.enablePushNotifications && !UserDefaults.standard.bool(forKey: "notification_prompted") { offerPush = true }
+            }
+        }
     }
-    func updateUIView(_ uiView: UIVisualEffectView, context: Context) {
-        uiView.effect = UIBlurEffect(style: style)
+    private func symbol(_ icon: String) -> String {
+        switch icon.lowercased() {
+        case "home", "house": return "house"
+        case "cart", "shopping_cart", "bag": return "cart"
+        case "person", "profile", "account", "user": return "person"
+        case "shop", "store", "storefront": return "storefront"
+        case "orders", "order", "inventory": return "shippingbox"
+        case "category", "grid_view", "grid": return "square.grid.2x2"
+        case "favorite", "heart": return "heart"
+        case "settings", "gear": return "gearshape"
+        case "search": return "magnifyingglass"
+        case "notifications", "bell": return "bell"
+        case "blog", "article": return "newspaper"
+        case "map", "location": return "map"
+        default: return "circle"
+        }
     }
 }

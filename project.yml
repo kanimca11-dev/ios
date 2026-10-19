@@ -1,53 +1,64 @@
 name: AppifyWebiOS
-
 options:
   bundleIdPrefix: com.example.appifyweb
   deploymentTarget:
     iOS: "15.0"
-
+packages:
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk.git
+    from: 12.0.0
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "15.0"
 targets:
   AppifyWebiOS:
     type: application
     platform: iOS
     deploymentTarget: "15.0"
-    sources: [AppifyWebiOS]
-
-    # System frameworks required by new features
+    sources:
+      - path: AppifyWebiOS
+        excludes: ["Resources"]
+      - path: AppifyWebiOS/Resources
+        buildPhase: resources
     dependencies:
-      - sdk: LocalAuthentication.framework   # BiometricLockView
-      - sdk: Network.framework               # NetworkMonitor
-      - sdk: WebKit.framework                # WKWebView
-      - sdk: UserNotifications.framework     # PushNotificationService
-      - sdk: UniformTypeIdentifiers.framework # File upload (UTType)
-
+      - sdk: LocalAuthentication.framework
+      - sdk: Network.framework
+      - sdk: WebKit.framework
+      - sdk: UserNotifications.framework
+      - sdk: SafariServices.framework
+      - sdk: CoreLocation.framework
+      - package: Firebase
+        product: FirebaseMessaging
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.appifyweb
         INFOPLIST_FILE: AppifyWebiOS/Info.plist
-        DEVELOPMENT_TEAM: ""          # Set via CI / Xcode signing
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: ""
-        SWIFT_VERSION: "5.9"
-
+        CODE_SIGN_ENTITLEMENTS: AppifyWebiOS/AppifyWeb.entitlements
+        APS_ENVIRONMENT: development
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
     info:
       path: AppifyWebiOS/Info.plist
       properties:
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
-        # Display name shown under the app icon — replaced by CI at build time
         CFBundleDisplayName: "APPIFYWEB_DISPLAY_NAME"
-
-        # ── Build-injected values (override in CI via -xcconfig or xcodebuild args) ──
         API_BASE_URL: "https://www.appifyweb24.com/backend/index.php"
         APP_TOKEN: "default_token"
-
-        # ── Permissions ───────────────────────────────────────────────────────
-        NSFaceIDUsageDescription: "This app uses Face ID to protect your account."
-        NSCameraUsageDescription: "This app needs camera access to upload photos."
-        NSPhotoLibraryUsageDescription: "This app needs photo library access to upload images."
-        NSLocationWhenInUseUsageDescription: "This app may use your location to improve your experience."
-
-        # ── Orientation (runtime-adjustable via requestGeometryUpdate) ────────
+        NSFaceIDUsageDescription: "Verify your identity to unlock this app."
+        NSCameraUsageDescription: "Use your camera when you choose to upload a photo or start a video call."
+        NSMicrophoneUsageDescription: "Use your microphone when you start an audio or video call."
+        NSPhotoLibraryUsageDescription: "Choose photos to upload."
+        NSLocationWhenInUseUsageDescription: "Share your location when you request a location feature."
+        UILaunchStoryboardName: LaunchScreen
+        UIUserInterfaceStyle: Light
+        UIViewControllerBasedStatusBarAppearance: true
+        FirebaseMessagingAutoInitEnabled: false
+        FirebaseAppDelegateProxyEnabled: false
+        UIBackgroundModes: [remote-notification]
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
@@ -57,20 +68,18 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-
-        # ── Push notifications (Background Modes) ────────────────────────────
-        UIBackgroundModes:
-          - remote-notification
-          - fetch
-
-        # ── Launch screen (Info.plist based — no storyboard needed) ───────────
-        UILaunchScreen:
-          UIColorName: LaunchBackgroundColor
-          UIImageName: LaunchSplash
-
-        UIUserInterfaceStyle: Light
-        # Force white status bar text (suits dark secondary-color nav bars)
-        UIStatusBarStyle: UIStatusBarStyleLightContent
-        UIViewControllerBasedStatusBarAppearance: false
         NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true   # Dev only — restrict in production
+          NSAllowsArbitraryLoads: false
+  AppifyWebiOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests]
+    dependencies:
+      - target: AppifyWebiOS
+schemes:
+  AppifyWebiOS:
+    build:
+      targets:
+        AppifyWebiOS: all
+    test:
+      targets: [AppifyWebiOSTests]
